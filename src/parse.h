@@ -3,6 +3,6 @@
 
 #include"ast.h"
 
-ASTCompilationUnit *nct_parse(Token*);
+ASTChunk *nct_parse(Token*);
 
 #endif

@@ -8,10 +8,10 @@ int main(int argc, char **argv) {
 	
 	Token *tokens = nct_lex(f);
 	
-	ASTCompilationUnit *ast = nct_parse(tokens);
+	ASTChunk *chunk = nct_parse(tokens);
 	
 	X86 x86;
 	x86_new(&x86);
-	x86_visit_compilation_unit(&x86, ast);
+	x86_visit_chunk(&x86, chunk);
 	x86_finish(&x86);
 }

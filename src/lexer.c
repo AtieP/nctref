@@ -35,6 +35,24 @@ Token nct_tokenize(FILE *f) {
 		return (Token) {.type = TOKEN_SEMICOLON, .content = NULL};
 	} else if(c == ':') {
 		return (Token) {.type = TOKEN_COLON, .content = NULL};
+	} else if(c == '(') {
+		return (Token) {.type = TOKEN_PAREN_L, .content = NULL};
+	} else if(c == ')') {
+		return (Token) {.type = TOKEN_PAREN_R, .content = NULL};
+	} else if(c == '{') {
+		return (Token) {.type = TOKEN_SQUIGGLY_L, .content = NULL};
+	} else if(c == '}') {
+		return (Token) {.type = TOKEN_SQUIGGLY_R, .content = NULL};
+	} else if(c == '+') {
+		return (Token) {.type = TOKEN_PLUS, .content = NULL};
+	} else if(c == '-') {
+		return (Token) {.type = TOKEN_MINUS, .content = NULL};
+	} else if(c == '*') {
+		return (Token) {.type = TOKEN_STAR, .content = NULL};
+	} else if(c == '/') {
+		return (Token) {.type = TOKEN_SLASH, .content = NULL};
+	} else if(c == '=') {
+		return (Token) {.type = TOKEN_EQUALS, .content = NULL};
 	} else if(isAlpha(c) || c == '@') {
 		char *content = calloc(64, 1);
 		
@@ -52,6 +70,9 @@ Token nct_tokenize(FILE *f) {
 		if(!strcmp(content, "local")) {
 			free(content);
 			return (Token) {.type = TOKEN_LOCAL, .content = NULL};
+		} else if(!strcmp(content, "if")) {
+			free(content);
+			return (Token) {.type = TOKEN_IF, .content = NULL};
 		}
 		
 		return (Token) {.type = TOKEN_IDENTIFIER, .content = content};

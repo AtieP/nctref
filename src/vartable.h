@@ -4,7 +4,7 @@
 #include"types.h"
 
 typedef enum {
-	VARTABLEENTRY_SYMBOL, VARTABLEENTRY_TYPE
+	VARTABLEENTRY_SYMBOL, VARTABLEENTRY_TYPE, VARTABLEENTRY_VAR
 } VarTableEntryKind;
 
 typedef struct VarTableEntry {
@@ -19,7 +19,12 @@ typedef struct VarTableEntry {
 		struct {
 			const char *linkName;
 		} symbol;
+		struct {
+			
+		};
 	} data;
+	
+	void *userdata;
 } VarTableEntry;
 
 typedef struct VarTable {

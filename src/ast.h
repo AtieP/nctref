@@ -5,24 +5,50 @@
 #include"lexer.h"
 #include"vartable.h"
 
-typedef enum ASTKind {
-	AST_COMPILATION_UNIT, AST_STATEMENT_SYMBOL, AST_TYPENAME, AST_EXPRESSION_PRIMITIVE
+typedef enum {
+	AST_CHUNK, AST_STATEMENT_SYMBOL, AST_TYPENAME, AST_EXPRESSION_PRIMITIVE, AST_STATEMENT_IF, AST_STATEMENT_VAR, AST_EXPRESSION_BINARY_OP, AST_EXPRESSION_VAR
 } ASTKind;
+
+typedef enum {
+	BINOP_ADD = 0, BINOP_SUB = 1, BINOP_MUL = 2, BINOP_DIV = 3
+} BinaryOp;
+extern int BINOP_COMMUTATIVE[];
+
+typedef enum {
+	EXPRESSION_CONSTANT_TRUTHY,
+	EXPRESSION_CONSTANT_FALSY,
+	EXPRESSION_NOT_CONSTANT
+} ASTExpressionConstantType;
 
 union AST;
 
 typedef struct {
 	ASTKind nodeKind;
 	TypePrimitive *type;
-	int isConstant;
-} ASTExpressionBase;
+	ASTExpressionConstantType constantType;
+} ASTExpression;
 
 typedef struct {
-	ASTExpressionBase;
+	ASTExpression;
 	
 	int numerator;
 	int denominator;
 } ASTExpressionPrimitive;
+
+typedef struct {
+	ASTExpression;
+	
+	union AST *left;
+	union AST *right; /* In commutative operations, this (right) is *never* a primitive. */
+	
+	BinaryOp op;
+} ASTExpressionBinaryOp;
+
+typedef struct {
+	ASTExpression;
+	
+	VarTableEntry *thing;
+} ASTExpressionVar;
 
 typedef struct {
 	ASTKind nodeKind;
@@ -32,29 +58,55 @@ typedef struct {
 
 typedef struct {
 	ASTKind nodeKind;
+	union AST *next;
+} ASTStatement;
+
+typedef struct {
+	ASTStatement;
 	
 	int isLocal;
 	ASTTypename *typename;
 	Token identifier;
 	
 	union AST *expression; /* Must be CT expression. */
-	
-	union AST *next;
 } ASTStatementSymbol;
+
+typedef struct {
+	ASTStatement;
+	
+	VarTableEntry *thing;
+	
+	union AST *expression;
+} ASTStatementVar;
 
 typedef struct {
 	ASTKind nodeKind;
 	
 	union AST *statements;
-} ASTCompilationUnit;
+} ASTChunk;
+
+typedef struct {
+	ASTStatement;
+	
+	union AST *expression;
+	
+	ASTChunk *then;
+} ASTStatementIf;
 
 typedef union AST {
 	ASTKind nodeKind;
 	
-	ASTCompilationUnit compilationUnit;
+	ASTChunk chunk;
+	ASTStatement statement;
 	ASTStatementSymbol statementSymbol;
+	ASTStatementVar statementVar;
+	ASTStatementIf statementIf;
+	ASTExpression expression;
 	ASTExpressionPrimitive expressionPrimitive;
-	ASTExpressionBase expressionBase;
+	ASTExpressionBinaryOp expressionBinaryOp;
+	ASTExpressionVar expressionVar;
 } AST;
+
+void ast_expression_optimize(AST*);
 
 #endif
