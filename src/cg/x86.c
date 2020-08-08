@@ -78,16 +78,17 @@ int x86_visit_expression(X86 *X, AST *ast, size_t coerceToSize) {
 
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
-		int dst = x86_visit_expression(X, ast->expressionBinaryOp.left, coerceToSize);
+		int dst = x86_visit_expression(X, ast->expressionBinaryOp.operands[0], coerceToSize);
 		
-		if(ast->expressionBinaryOp.right->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-			ASTExpressionPrimitive *prim = &ast->expressionBinaryOp.right->expressionPrimitive;
+		for(size_t i = 1; i < ast->expressionBinaryOp.amountOfOperands; i++) {
+			AST *operand = ast->expressionBinaryOp.operands[i];
+			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+				X->text = sdscatfmt(X->text, "add %s, %i\n", X->rallocator->registers[dst].name, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
+			} else if(operand->nodeKind == AST_EXPRESSION_VAR) {
+				int addend = ((X86VarEntryInfo*) operand->expressionVar.thing->userdata)->id;
 
-			X->text = sdscatfmt(X->text, "add %s, %i\n", X->rallocator->registers[dst].name, prim->numerator / prim->denominator);
-		} else if(ast->expressionBinaryOp.right->nodeKind == AST_EXPRESSION_VAR) {
-			int addend = ((X86VarEntryInfo*) ast->expressionBinaryOp.right->expressionVar.thing->userdata)->id;
-			
-			X->text = sdscatfmt(X->text, "add %s, %s\n", X->rallocator->registers[dst].name, X->rallocator->registers[addend].name);
+				X->text = sdscatfmt(X->text, "add %s, %s\n", X->rallocator->registers[dst].name, X->rallocator->registers[addend].name);
+			}
 		}
 		
 		return dst;

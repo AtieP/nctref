@@ -35,13 +35,13 @@ typedef struct {
 	int denominator;
 } ASTExpressionPrimitive;
 
+/* This node has no precedence, the parser handles that. */
 typedef struct {
 	ASTExpression;
 	
-	union AST *left;
-	union AST *right; /* In commutative operations, this (right) is *never* a primitive. */
-	
-	BinaryOp op;
+	size_t amountOfOperands;
+	union AST **operands;
+	BinaryOp *operators;
 } ASTExpressionBinaryOp;
 
 typedef struct {
@@ -107,6 +107,6 @@ typedef union AST {
 	ASTExpressionVar expressionVar;
 } AST;
 
-void ast_expression_optimize(AST*);
+AST *ast_expression_optimize(AST*);
 
 #endif

@@ -1,6 +1,7 @@
 #include"ast.h"
 
 #include<stdint.h>
+#include<string.h>
 
 int BINOP_COMMUTATIVE[] = {[BINOP_ADD] = 1, [BINOP_SUB] = 0, [BINOP_MUL] = 1, [BINOP_DIV] = 0};
 
@@ -13,33 +14,43 @@ static int cmp_op_level(BinaryOp one, BinaryOp two) {
 	return 0;
 }
 
-void ast_expression_optimize(AST *ast) {
+AST *ast_expression_optimize(AST *ast) {
 	if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
-		ast_expression_optimize(ast->expressionBinaryOp.left);
-		ast_expression_optimize(ast->expressionBinaryOp.right);
+		int *constont = NULL;
 		
-		if(ast->expressionBinaryOp.right->nodeKind == AST_EXPRESSION_BINARY_OP && cmp_op_level(ast->expressionBinaryOp.right->expressionBinaryOp.op, ast->expressionBinaryOp.op)) {
+		for(size_t i = 0; i < ast->expressionBinaryOp.amountOfOperands; i++) {
+			//~ ast->expressionBinaryOp.operands[i] = ast_expression_optimize(ast->expressionBinaryOp.operands[i]);
 			
+			if(ast->expressionBinaryOp.operands[i]->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+				if(constont) {
+					switch(ast->expressionBinaryOp.operators[i - 1]) {
+					case BINOP_ADD:
+						*constont += ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					case BINOP_SUB:
+						*constont -= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					case BINOP_MUL:
+						*constont *= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					case BINOP_DIV:
+						*constont /= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					}
+					
+					memmove(&ast->expressionBinaryOp.operands[i], &ast->expressionBinaryOp.operands[i + 1], sizeof(AST*) * (ast->expressionBinaryOp.amountOfOperands - i));
+					memmove(&ast->expressionBinaryOp.operators[i - 1], &ast->expressionBinaryOp.operators[i], sizeof(BinaryOp) * (ast->expressionBinaryOp.amountOfOperands - i));
+					ast->expressionBinaryOp.amountOfOperands--, i--; /* i-- because the index shouldn't change */
+				} else {
+					constont = &ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+				}
+			}
 		}
 		
-		if(ast->expressionBinaryOp.left->nodeKind == AST_EXPRESSION_PRIMITIVE && ast->expressionBinaryOp.right->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-			int64_t l = ast->expressionBinaryOp.left->expressionPrimitive.numerator / ast->expressionBinaryOp.left->expressionPrimitive.denominator;
-			int64_t r = ast->expressionBinaryOp.right->expressionPrimitive.numerator / ast->expressionBinaryOp.right->expressionPrimitive.denominator;
-			
-			int64_t x;
-			if(ast->expressionBinaryOp.op == BINOP_ADD) {
-				x = l + r;
-			} else if(ast->expressionBinaryOp.op == BINOP_SUB) {
-				x = l - r;
-			} else if(ast->expressionBinaryOp.op == BINOP_MUL) {
-				x = l * r;
-			} else if(ast->expressionBinaryOp.op == BINOP_DIV) {
-				x = l / r;
-			}
-			
-			ast->nodeKind = AST_EXPRESSION_PRIMITIVE;
-			ast->expressionPrimitive.numerator = x;
-			ast->expressionPrimitive.denominator = 1;
+		if(ast->expressionBinaryOp.amountOfOperands == 1) {
+			return ast->expressionBinaryOp.operands[0];
 		}
 	}
+	
+	return ast;
 }

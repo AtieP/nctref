@@ -81,17 +81,35 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 	} else if(levelOfPrecedence == 1) {
 		AST *ret = nct_parse_expression(P, 2);
 		
-		while(1) {
-			BinaryOp op;
-			if(maybe(P, TOKEN_STAR)) op = BINOP_MUL;
-			else if(maybe(P, TOKEN_SLASH)) op = BINOP_DIV;
-			else break;
-			
+		if(peek(P, 0).type == TOKEN_STAR || peek(P, 0).type == TOKEN_SLASH) {
 			ASTExpressionBinaryOp *astop = malloc(sizeof(*ret));
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
-			astop->op = op;
-			astop->left = ret;
-			astop->right = nct_parse_expression(P, 2);
+			astop->constantType = EXPRESSION_NOT_CONSTANT;
+			astop->amountOfOperands = 1;
+			
+			size_t capacity = 2;
+			astop->operands = malloc(sizeof(*astop->operands) * capacity);
+			astop->operators = malloc(sizeof(*astop->operators) * (capacity - 1));
+			
+			astop->operands[0] = ret;
+			
+			while(1) {
+				BinaryOp op;
+				if(maybe(P, TOKEN_STAR)) op = BINOP_MUL;
+				else if(maybe(P, TOKEN_SLASH)) op = BINOP_DIV;
+				else break;
+				
+				if(astop->amountOfOperands == capacity) {
+					capacity *= 2;
+					
+					astop->operands = realloc(astop->operands, sizeof(*astop->operands) * capacity);
+					astop->operators = realloc(astop->operators, sizeof(*astop->operators) * (capacity - 1));
+				}
+				
+				astop->operators[astop->amountOfOperands - 1] = op;
+				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, 2);
+			}
+			
 			ret = (AST*) astop;
 		}
 		
@@ -99,24 +117,34 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 	} else if(levelOfPrecedence == 0) {
 		AST *ret = nct_parse_expression(P, 1);
 		
-		while(1) {
-			BinaryOp op;
-			if(maybe(P, TOKEN_PLUS)) op = BINOP_ADD;
-			else if(maybe(P, TOKEN_MINUS)) op = BINOP_SUB;
-			else break;
-			
+		if(peek(P, 0).type == TOKEN_PLUS || peek(P, 0).type == TOKEN_MINUS) {
 			ASTExpressionBinaryOp *astop = malloc(sizeof(*ret));
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
-			astop->op = op;
-			astop->left = ret;
-			astop->right = nct_parse_expression(P, 1);
+			astop->constantType = EXPRESSION_NOT_CONSTANT;
+			astop->amountOfOperands = 1;
 			
-			/* Commutative operations have the primitive on the left always */
-			//~ if(BINOP_COMMUTATIVE[op] && astop->right->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-				//~ AST *temp = astop->left;
-				//~ astop->left = astop->right;
-				//~ astop->right = temp;
-			//~ }
+			size_t capacity = 2;
+			astop->operands = malloc(sizeof(*astop->operands) * capacity);
+			astop->operators = malloc(sizeof(*astop->operators) * (capacity - 1));
+			
+			astop->operands[0] = ret;
+			
+			while(1) {
+				BinaryOp op;
+				if(maybe(P, TOKEN_PLUS)) op = BINOP_ADD;
+				else if(maybe(P, TOKEN_MINUS)) op = BINOP_SUB;
+				else break;
+				
+				if(astop->amountOfOperands == capacity) {
+					capacity *= 2;
+					
+					astop->operands = realloc(astop->operands, sizeof(*astop->operands) * capacity);
+					astop->operators = realloc(astop->operators, sizeof(*astop->operators) * (capacity - 1));
+				}
+				
+				astop->operators[astop->amountOfOperands - 1] = op;
+				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, 1);
+			}
 			
 			ret = (AST*) astop;
 		}
