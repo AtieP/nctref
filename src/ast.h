@@ -6,7 +6,7 @@
 #include"vartable.h"
 
 typedef enum {
-	AST_CHUNK, AST_STATEMENT_SYMBOL, AST_TYPENAME, AST_EXPRESSION_PRIMITIVE, AST_STATEMENT_IF, AST_STATEMENT_VAR, AST_EXPRESSION_BINARY_OP, AST_EXPRESSION_VAR
+	AST_CHUNK, AST_STATEMENT_DECL, AST_TYPE_IDENTIFIER, AST_EXPRESSION_PRIMITIVE, AST_STATEMENT_IF, AST_EXPRESSION_BINARY_OP, AST_EXPRESSION_VAR, AST_TYPE_POINTER
 } ASTKind;
 
 typedef enum {
@@ -53,8 +53,21 @@ typedef struct {
 typedef struct {
 	ASTKind nodeKind;
 	
+	size_t size;
+} ASTType;
+
+typedef struct {
+	ASTType;
+	
 	Token identifier;
-} ASTTypename;
+} ASTTypeIdentifier;
+
+typedef struct {
+	ASTType;
+	
+	union AST *child;
+	int levels;
+} ASTTypePointer;
 
 typedef struct {
 	ASTKind nodeKind;
@@ -64,20 +77,10 @@ typedef struct {
 typedef struct {
 	ASTStatement;
 	
-	int isLocal;
-	ASTTypename *typename;
-	Token identifier;
-	
-	union AST *expression; /* Must be CT expression. */
-} ASTStatementSymbol;
-
-typedef struct {
-	ASTStatement;
-	
 	VarTableEntry *thing;
 	
 	union AST *expression;
-} ASTStatementVar;
+} ASTStatementDecl;
 
 typedef struct {
 	ASTKind nodeKind;
@@ -98,8 +101,7 @@ typedef union AST {
 	
 	ASTChunk chunk;
 	ASTStatement statement;
-	ASTStatementSymbol statementSymbol;
-	ASTStatementVar statementVar;
+	ASTStatementDecl statementDecl;
 	ASTStatementIf statementIf;
 	ASTExpression expression;
 	ASTExpressionPrimitive expressionPrimitive;

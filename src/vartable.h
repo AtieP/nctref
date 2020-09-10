@@ -18,6 +18,7 @@ typedef struct VarTableEntry {
 	union {
 		struct {
 			const char *linkName;
+			int isLocal;
 		} symbol;
 		struct {
 			

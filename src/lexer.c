@@ -3,9 +3,10 @@
 #include<stdlib.h>
 #include<assert.h>
 #include<string.h>
+#include"reporting.h"
 
 char *TOKEN_NAMES[] = {
-	"identifier", "'local'", "EOF", "number", "';'", "':'"
+	"identifier", "'local'", "EOF", "number", "';'", "':'", "'if'", "'('", "')'", "'{'", "'}'", "'='", "'+'", "'-'", "'*'", "'/'"
 };
 
 static int isAlpha(int c) {
@@ -114,8 +115,7 @@ Token nct_tokenize(FILE *f) {
 		return nct_tokenize(f);
 	}
 
-	fprintf(stderr, "Invalid character '%c'.", c);
-	assert(0);
+	stahp("Invalid character '%c'", c);
 }
 
 Token *nct_lex(FILE *f) {

@@ -3,8 +3,16 @@
 
 #include"cg/x86.h"
 
+#include"reporting.h"
+#include<errno.h>
+#include<string.h>
+
 int main(int argc, char **argv) {
+	if(argc == 1) stahp("No file specified.");
+	
 	FILE *f = fopen(argv[1], "rb");
+	
+	if(!f) stahp("%s: %s", argv[1], strerror(errno));
 	
 	Token *tokens = nct_lex(f);
 	

@@ -113,6 +113,8 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 			ret = (AST*) astop;
 		}
 		
+		ret = ast_expression_optimize(ret);
+		
 		return ret;
 	} else if(levelOfPrecedence == 0) {
 		AST *ret = nct_parse_expression(P, 1);
@@ -149,25 +151,40 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 			ret = (AST*) astop;
 		}
 		
-		ast_expression_optimize(ret);
+		ret = ast_expression_optimize(ret);
 		
 		return ret;
 	}
 }
 
-ASTTypename *nct_parse_typename(Parser *P) {
-	ASTTypename *ret = malloc(sizeof(*ret));
-	ret->nodeKind = AST_TYPENAME;
+Type *nct_parse_typename(Parser *P) {
+	Type *ret = (Type*) primitive_parse(expect(P, TOKEN_IDENTIFIER).content);
 	
-	ret->identifier = expect(P, TOKEN_IDENTIFIER);
+	while(maybe(P, TOKEN_STAR)) {
+		TypePointer *ptr = malloc(sizeof(*ptr));
+		ptr->type = TYPE_TYPE_POINTER;
+		ptr->of = ret;
+		
+		ret = (Type*) ptr;
+	}
 	
 	return ret;
 }
 
 static AST *parse_declaration(Parser *P) {
 	int isLocal = maybe(P, TOKEN_LOCAL);
-	ASTTypename *typename = nct_parse_typename(P);
+	Type *type = nct_parse_typename(P);
 	Token name = expect(P, TOKEN_IDENTIFIER);
+		
+	VarTableEntry *entry = malloc(sizeof(*entry));
+	entry->name = name.content;
+	entry->type = type;
+	vartable_set(P->scope, entry);
+	
+	ASTStatementDecl *ret = malloc(sizeof(*ret));
+	ret->nodeKind = AST_STATEMENT_DECL;
+	ret->thing = entry;
+	ret->next = NULL;
 	
 	if(maybe(P, TOKEN_EQUALS)) {
 		if(isLocal) { /* Impossible, error. */
@@ -176,44 +193,18 @@ static AST *parse_declaration(Parser *P) {
 			return NULL;
 		}
 		
-		VarTableEntry *entry = malloc(sizeof(*entry));
-		entry->name = name.content;
-		entry->type = (Type*) primitive_parse(typename->identifier.content);
 		entry->kind = VARTABLEENTRY_VAR;
-		vartable_set(P->scope, entry);
-		
-		ASTStatementVar *ret = malloc(sizeof(*ret));
-		ret->nodeKind = AST_STATEMENT_VAR;
-		ret->thing = entry;
-		ret->expression = nct_parse_expression(P, 0);
-		ret->next = NULL;
-		
-		expect(P, TOKEN_SEMICOLON);
-		
-		return (AST*) ret;
 	} else if(maybe(P, TOKEN_COLON)) {
-		ASTStatementSymbol *ret = malloc(sizeof(*ret));
-		ret->nodeKind = AST_STATEMENT_SYMBOL;
-		ret->isLocal = isLocal;
-		ret->typename = typename;
-		ret->identifier = name;
-		ret->expression = nct_parse_expression(P, 0);
-		ret->next = NULL;
-		
-		VarTableEntry *entry = malloc(sizeof(*entry));
-		entry->name = ret->identifier.content;
-		entry->type = (Type*) primitive_parse(ret->typename->identifier.content);
 		entry->kind = VARTABLEENTRY_SYMBOL;
-		entry->data.symbol.linkName = ret->identifier.content;
-		vartable_set(P->scope, entry);
-		
-		expect(P, TOKEN_SEMICOLON);
-		
-		return (AST*) ret;
-	}
+		entry->data.symbol.isLocal = isLocal;
+		entry->data.symbol.linkName = name.content;
+	} else abort();
 	
-	abort();
-	return NULL;
+	ret->expression = nct_parse_expression(P, 0);
+	
+	expect(P, TOKEN_SEMICOLON);
+	
+	return (AST*) ret;
 }
 
 ASTChunk *nct_parse_chunk(Parser*, int);

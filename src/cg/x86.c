@@ -99,28 +99,31 @@ int x86_visit_expression(X86 *X, AST *ast, size_t coerceToSize) {
 }
 
 AST *x86_visit_statement(X86 *X, AST *ast) {
-	if(ast->nodeKind == AST_STATEMENT_SYMBOL) {
-		if(ast->statementSymbol.expression->expression.constantType == EXPRESSION_NOT_CONSTANT) {
-			fputs("Symbol declaration may contain constant expressions only.\n", stderr);
-			abort();
+	if(ast->nodeKind == AST_STATEMENT_DECL) {
+		VarTableEntry *ent = ast->statementDecl.thing;
+		if(ent->kind == VARTABLEENTRY_SYMBOL) {
+			if(ast->statementDecl.expression->expression.constantType == EXPRESSION_NOT_CONSTANT) {
+				fputs("Symbol declaration may contain constant expressions only.\n", stderr);
+				abort();
+			}
+			
+			if(!ent->data.symbol.isLocal) {
+				X->text = sdscatfmt(X->text, "global %s\n", ent->name);
+			}
+			
+			size_t typeSize = type_size(ent->type);
+			
+			if(ast->statementDecl.expression) {
+				AST *expr = ast->statementDecl.expression;
+				X->text = sdscatfmt(X->text, "%s: %s %i\n", ent->data.symbol.linkName, yasm_typename(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
+			} else {
+				X->text = sdscatfmt(X->text, "%s: resb %i\n", ent->data.symbol.linkName, typeSize);
+			}
+		} else if(ent->kind == VARTABLEENTRY_VAR) {
+			X86VarEntryInfo *info = ent->userdata = malloc(sizeof(*info));
+			info->isInRegister = 1;
+			info->id = x86_visit_expression(X, ast->statementDecl.expression, ent->type->primitive.width / 8);
 		}
-		
-		if(!ast->statementSymbol.isLocal) {
-			X->text = sdscatfmt(X->text, "global %s\n", ast->statementSymbol.identifier.content);
-		}
-		
-		size_t typeSize = type_size((Type*) primitive_parse(ast->statementSymbol.typename->identifier.content));
-		
-		if(ast->statementSymbol.expression) {
-			AST *expr = ast->statementSymbol.expression;
-			X->text = sdscatfmt(X->text, "%s: %s %i\n", ast->statementSymbol.identifier.content, yasm_typename(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
-		} else {
-			X->text = sdscatfmt(X->text, "%s: resb %i\n", ast->statementSymbol.identifier.content, type_size((Type*) primitive_parse(ast->statementSymbol.typename->identifier.content)));
-		}
-	} else if(ast->nodeKind == AST_STATEMENT_VAR) {
-		X86VarEntryInfo *info = ast->statementVar.thing->userdata = malloc(sizeof(*info));
-		info->isInRegister = 1;
-		info->id = x86_visit_expression(X, ast->statementVar.expression, ast->statementVar.thing->type->primitive.width / 8);
 	} else if(ast->nodeKind == AST_STATEMENT_IF) {
 		switch(ast->statementIf.expression->expression.constantType) {
 		case EXPRESSION_NOT_CONSTANT: {
