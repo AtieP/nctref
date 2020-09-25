@@ -47,8 +47,8 @@ static int maybe(Parser *P, TokenKind t) {
 	return 0;
 }
 
-AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
-	if(levelOfPrecedence == 2) {
+AST *nct_parse_expression(Parser *P, int lOP) {
+	if(lOP == 4) {
 		if(peek(P, 0).type == TOKEN_NUMBER) {
 			ASTExpressionPrimitive *ret = malloc(sizeof(*ret));
 			ret->nodeKind = AST_EXPRESSION_PRIMITIVE;
@@ -78,11 +78,39 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 			
 			return (AST*) ret;
 		}
-	} else if(levelOfPrecedence == 1) {
-		AST *ret = nct_parse_expression(P, 2);
+	} else if(lOP == 3) {
+		if(maybe(P, TOKEN_STAR)) {
+			ASTExpressionUnaryOp *astop = malloc(sizeof(*astop));
+			astop->nodeKind = AST_EXPRESSION_UNARY_OP;
+			astop->constantType = EXPRESSION_NOT_CONSTANT;
+			astop->operator = UNOP_DEREF;
+			astop->chaiuld = nct_parse_expression(P, lOP); /* Not +1! */
+			astop->type = type_pointer_wrap((Type*) astop->chaiuld->expression.type);
+			
+			return (AST*) astop;
+		}
+		
+		return nct_parse_expression(P, lOP + 1);
+	} else if(lOP == 2) {
+		AST *ret = nct_parse_expression(P, lOP + 1);
+
+		while(maybe(P, TOKEN_PAREN_L)) {
+			ASTExpressionCall *call = malloc(sizeof(*ret));
+			call->nodeKind = AST_EXPRESSION_CALL;
+			call->constantType = EXPRESSION_NOT_CONSTANT;
+			call->what = ret;
+			call->args = NULL;
+			ret = (AST*) call;
+			
+			expect(P, TOKEN_PAREN_R);
+		}
+		
+		return ret;
+	} else if(lOP == 1) {
+		AST *ret = nct_parse_expression(P, lOP + 1);
 		
 		if(peek(P, 0).type == TOKEN_STAR || peek(P, 0).type == TOKEN_SLASH) {
-			ASTExpressionBinaryOp *astop = malloc(sizeof(*ret));
+			ASTExpressionBinaryOp *astop = malloc(sizeof(*astop));
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
 			astop->constantType = EXPRESSION_NOT_CONSTANT;
 			astop->amountOfOperands = 1;
@@ -107,7 +135,7 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 				}
 				
 				astop->operators[astop->amountOfOperands - 1] = op;
-				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, 2);
+				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1);
 			}
 			
 			ret = (AST*) astop;
@@ -116,11 +144,11 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 		ret = ast_expression_optimize(ret);
 		
 		return ret;
-	} else if(levelOfPrecedence == 0) {
-		AST *ret = nct_parse_expression(P, 1);
+	} else if(lOP == 0) {
+		AST *ret = nct_parse_expression(P, lOP + 1);
 		
 		if(peek(P, 0).type == TOKEN_PLUS || peek(P, 0).type == TOKEN_MINUS) {
-			ASTExpressionBinaryOp *astop = malloc(sizeof(*ret));
+			ASTExpressionBinaryOp *astop = malloc(sizeof(*astop));
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
 			astop->constantType = EXPRESSION_NOT_CONSTANT;
 			astop->amountOfOperands = 1;
@@ -145,7 +173,7 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 				}
 				
 				astop->operators[astop->amountOfOperands - 1] = op;
-				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, 1);
+				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1);
 			}
 			
 			ret = (AST*) astop;
@@ -160,12 +188,34 @@ AST *nct_parse_expression(Parser *P, int levelOfPrecedence) {
 Type *nct_parse_typename(Parser *P) {
 	Type *ret = (Type*) primitive_parse(expect(P, TOKEN_IDENTIFIER).content);
 	
-	while(maybe(P, TOKEN_STAR)) {
-		TypePointer *ptr = malloc(sizeof(*ptr));
-		ptr->type = TYPE_TYPE_POINTER;
-		ptr->of = ret;
-		
-		ret = (Type*) ptr;
+	while(peek(P, 0).type == TOKEN_PAREN_L || peek(P, 0).type == TOKEN_STAR) {
+		if(maybe(P, TOKEN_STAR)) {
+			TypePointer *ptr = malloc(sizeof(*ptr));
+			ptr->type = TYPE_TYPE_POINTER;
+			ptr->of = ret;
+			
+			ret = (Type*) ptr;
+		} else if(maybe(P, TOKEN_PAREN_L)) {
+			TypeFunction *fun = malloc(sizeof(*fun));
+			fun->type = TYPE_TYPE_FUNCTION;
+			fun->ret = ret;
+			fun->argCount = 0;
+			fun->args = malloc(0);
+			
+			if(!maybe(P, TOKEN_PAREN_R)) {
+				while(1) {
+					fun->argCount++;
+					fun->args = realloc(fun->args, sizeof(Type*) * fun->argCount);
+					fun->args[fun->argCount - 1] = nct_parse_typename(P);
+					
+					if(maybe(P, TOKEN_PAREN_R)) {
+						break;
+					} else expect(P, TOKEN_COMMA);
+				}
+			}
+			
+			ret = (Type*) fun;
+		}
 	}
 	
 	return ret;
@@ -173,6 +223,11 @@ Type *nct_parse_typename(Parser *P) {
 
 static AST *parse_declaration(Parser *P) {
 	int isLocal = maybe(P, TOKEN_LOCAL);
+	int isExternal = 0;
+	if(!isLocal) {
+		isExternal = maybe(P, TOKEN_EXTERN);
+	}
+	
 	Type *type = nct_parse_typename(P);
 	Token name = expect(P, TOKEN_IDENTIFIER);
 		
@@ -187,20 +242,34 @@ static AST *parse_declaration(Parser *P) {
 	ret->next = NULL;
 	
 	if(maybe(P, TOKEN_EQUALS)) {
-		if(isLocal) { /* Impossible, error. */
-			fputs("`local` keyword is to be used for symbol declaration only.\n", stderr);
+		if(isLocal || isExternal) { /* Impossible, error. */
+			fputs("'local' and 'extern' keywords are to be used for symbol declaration only.\n", stderr);
 			abort();
 			return NULL;
 		}
 		
 		entry->kind = VARTABLEENTRY_VAR;
+		
+		ret->expression = nct_parse_expression(P, 0);
 	} else if(maybe(P, TOKEN_COLON)) {
+		if(isExternal) {
+			fputs("External symbols may not be defined.\n", stderr);
+			abort();
+			return NULL;
+		}
+		
 		entry->kind = VARTABLEENTRY_SYMBOL;
 		entry->data.symbol.isLocal = isLocal;
+		entry->data.symbol.isExternal = isExternal;
 		entry->data.symbol.linkName = name.content;
-	} else abort();
-	
-	ret->expression = nct_parse_expression(P, 0);
+		
+		ret->expression = nct_parse_expression(P, 0);
+	} else if(isExternal) {
+		entry->kind = VARTABLEENTRY_SYMBOL;
+		entry->data.symbol.isLocal = isLocal;
+		entry->data.symbol.isExternal = isExternal;
+		entry->data.symbol.linkName = name.content;
+	}
 	
 	expect(P, TOKEN_SEMICOLON);
 	
@@ -222,6 +291,22 @@ AST *nct_parse_statement(Parser *P) {
 		expect(P, TOKEN_SQUIGGLY_R);
 		
 		ret->next = NULL;
+		
+		return (AST*) ret;
+	} else if(maybe(P, TOKEN_LOOP)) {
+		ASTStatementLoop *ret = malloc(sizeof(*ret));
+		ret->nodeKind = AST_STATEMENT_LOOP;
+		
+		expect(P, TOKEN_SQUIGGLY_L);
+		ret->body = nct_parse_chunk(P, 0);
+		expect(P, TOKEN_SQUIGGLY_R);
+		
+		return (AST*) ret;
+	} else if(maybe(P, TOKEN_BREAK)) {
+		ASTStatementLoop *ret = malloc(sizeof(*ret));
+		ret->nodeKind = AST_STATEMENT_BREAK;
+		
+		expect(P, TOKEN_SEMICOLON);
 		
 		return (AST*) ret;
 	}

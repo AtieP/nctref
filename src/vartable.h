@@ -19,6 +19,7 @@ typedef struct VarTableEntry {
 		struct {
 			const char *linkName;
 			int isLocal;
+			int isExternal;
 		} symbol;
 		struct {
 			

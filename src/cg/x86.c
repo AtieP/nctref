@@ -2,7 +2,7 @@
 
 #include<stdlib.h>
 
-#define SYNTAX_GAS
+//~ #define SYNTAX_GAS
 
 static uint8_t register_size(int i) {
 	return 1 << (i / 5);
@@ -33,7 +33,7 @@ static RegisterAllocator *create_ralloc(X86 *X) {
 	return a;
 }
 
-static char *yasm_typename(int bytes) {
+static char *yasm_directname(int bytes) {
 	switch(bytes) {
 #ifdef SYNTAX_GAS
 	case 1:
@@ -60,11 +60,39 @@ static char *yasm_typename(int bytes) {
 	return NULL;
 }
 
+static char *yasm_sizespecifier(int bytes) {
+	switch(bytes) {
+#ifdef SYNTAX_GAS
+	//~ case 1:
+		//~ return "byte";
+	//~ case 2:
+		//~ return "word";
+	//~ case 4:
+		//~ return "long";
+	//~ case 8:
+		//~ return "quad";
+	#error Unsupported.
+#else
+	case 1:
+		return "byte";
+	case 2:
+		return "word";
+	case 4:
+		return "dword";
+	case 8:
+		return "qword";
+#endif
+	}
+
+	abort();
+	return NULL;
+}
+
 static void gmovi(X86 *X, const char *dst, size_t val) {
 #ifdef SYNTAX_GAS
 	X->text = sdscatfmt(X->text, "mov $%i, %%%s\n", val, dst);
 #else
-	X->text = sdscatfmt(X->text, "mov $%i, %%%s\n", val, dst);
+	X->text = sdscatfmt(X->text, "mov %s, %i\n", dst, val);
 #endif
 }
 
@@ -100,10 +128,55 @@ static void gtest1(X86 *X, const char *reg) {
 #endif
 }
 
+static void gmovsym(X86 *X, int dstSize, int srcSize, const char *dst, const char *src) {
+	int zx = dstSize > srcSize;
+	
+#ifdef SYNTAX_GAS
+	//~ X->text = sdscatfmt(X->text, "mov%s %s, %%%s\n", zx ? "zx" : "", src, dst);
+	#error Unsupported for now.
+#else
+	X->text = sdscatfmt(X->text, "mov%s %s, %s [%s]\n", zx ? "zx" : "", dst, yasm_sizespecifier(srcSize), src);
+#endif
+}
+
+static void gcallr(X86 *X, const char *reg) {
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "call %%%s\n", reg);
+#else
+	X->text = sdscatfmt(X->text, "call %s\n", reg);
+#endif
+}
+
+static void gcallsym(X86 *X, const char *sym) {
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "call $%s\n", sym);
+#else
+	X->text = sdscatfmt(X->text, "call %s\n", sym);
+#endif
+}
+
+static void gpushr(X86 *X, const char *reg) {
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "push %%%s\n", reg);
+#else
+	X->text = sdscatfmt(X->text, "push %s\n", reg);
+#endif
+}
+
+static void gpopr(X86 *X, const char *reg) {
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "pop %%%s\n", reg);
+#else
+	X->text = sdscatfmt(X->text, "pop %s\n", reg);
+#endif
+}
+
 void x86_new(X86 *X) {
 	X->text = sdsempty();
 	X->lidx = 0;
 	X->stackDepth = 0;
+	
+	X->loopStackIndex = 0;
 	
 	X->target = X86_TARGET_80386;
 	X->mode = X86_MODE_32;
@@ -122,13 +195,18 @@ int x86_visit_expression(X86 *X, AST *ast, size_t coerceToSize) {
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_VAR) {
 		int dst = ralloc_alloc(X->rallocator, coerceToSize);
-		int src = ((X86VarEntryInfo*) ast->expressionVar.thing->userdata)->id;
 		
-		// fixes "mov al, bx"
-		if(register_size(src) > register_size(dst)) src = cast_register(src, register_size(dst));
+		if(ast->expressionVar.thing->kind == VARTABLEENTRY_VAR) {
+			int src = ((X86VarEntryInfo*) ast->expressionVar.thing->userdata)->id;
+			
+			// fixes "mov al, bx"
+			if(register_size(src) > register_size(dst)) src = cast_register(src, register_size(dst));
+			
+			gmovr(X, register_size(dst) > register_size(src), X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
+		} else if(ast->expressionVar.thing->kind == VARTABLEENTRY_SYMBOL) {
+			gmovsym(X, coerceToSize, coerceToSize, X->rallocator->registers[dst].name, ast->expressionVar.thing->data.symbol.linkName);
+		}
 		
-		gmovr(X, register_size(dst) > register_size(src), X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
-
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
 		int dst = x86_visit_expression(X, ast->expressionBinaryOp.operands[0], coerceToSize);
@@ -137,14 +215,71 @@ int x86_visit_expression(X86 *X, AST *ast, size_t coerceToSize) {
 			AST *operand = ast->expressionBinaryOp.operands[i];
 			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
 				gaddi(X, X->rallocator->registers[dst].name, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
-			} else if(operand->nodeKind == AST_EXPRESSION_VAR) {
+			} else if(operand->nodeKind == AST_EXPRESSION_VAR && operand->expressionVar.thing->kind == VARTABLEENTRY_VAR) {
 				int addend = ((X86VarEntryInfo*) operand->expressionVar.thing->userdata)->id;
 
 				gaddr(X, X->rallocator->registers[dst].name, X->rallocator->registers[cast_register(addend, register_size(dst))].name);
+			} else {
+				int addend = x86_visit_expression(X, operand, coerceToSize);
+				gaddr(X, X->rallocator->registers[dst].name, X->rallocator->registers[addend].name);
+				ralloc_free(X->rallocator, addend);
 			}
 		}
 		
 		return dst;
+	} else if(ast->nodeKind == AST_EXPRESSION_UNARY_OP) {
+		AST *chaiuld = ast->expressionUnaryOp.chaiuld;
+		
+		if(chaiuld->nodeKind == AST_EXPRESSION_VAR) {
+			int dst = ralloc_alloc(X->rallocator, coerceToSize);
+			int src = ((X86VarEntryInfo*) chaiuld->expressionVar.thing->userdata)->id;
+			
+#ifdef SYNTAX_GAS
+			X->text = sdscatfmt(X->text, "mov (%%%s), %%%s\n", X->rallocator->registers[src].name, X->rallocator->registers[dst].name);
+#else
+			X->text = sdscatfmt(X->text, "mov %s, [%s]\n", X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
+#endif
+			
+			return dst;
+		} else {
+			int dst = x86_visit_expression(X, chaiuld, -1);
+			
+#ifdef SYNTAX_GAS
+			X->text = sdscatfmt(X->text, "mov (%%%s), %%%s\n", X->rallocator->registers[dst].name, X->rallocator->registers[cast_register(dst, coerceToSize)].name);
+#else
+			X->text = sdscatfmt(X->text, "mov %s, [%s]\n", X->rallocator->registers[cast_register(dst, coerceToSize)].name, X->rallocator->registers[dst].name);
+#endif
+			
+			return cast_register(dst, coerceToSize);
+		}
+	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
+		if(ast->expressionCall.what->nodeKind == AST_EXPRESSION_VAR && ast->expressionCall.what->expressionVar.thing->kind == VARTABLEENTRY_SYMBOL) {
+			gpushr(X, "eax");
+			gpushr(X, "ecx");
+			gpushr(X, "edx");
+			
+			gcallsym(X, ast->expressionCall.what->expressionVar.thing->data.symbol.linkName);
+			
+			gpopr(X, "edx");
+			gpopr(X, "ecx");
+			gpopr(X, "eax");
+			
+			return 0;
+		} else {
+			int dst = x86_visit_expression(X, ast->expressionCall.what, -1);
+
+			gpushr(X, "eax");
+			gpushr(X, "ecx");
+			gpushr(X, "edx");
+			
+			gcallr(X, X->rallocator->registers[dst].name);
+			
+			gpopr(X, "edx");
+			gpopr(X, "ecx");
+			gpopr(X, "eax");
+			
+			return dst;
+		}
 	}
 
 	abort();
@@ -155,31 +290,37 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 	if(ast->nodeKind == AST_STATEMENT_DECL) {
 		VarTableEntry *ent = ast->statementDecl.thing;
 		if(ent->kind == VARTABLEENTRY_SYMBOL) {
-			if(ast->statementDecl.expression->expression.constantType == EXPRESSION_NOT_CONSTANT) {
-				fputs("Symbol declaration may contain constant expressions only.\n", stderr);
-				abort();
-			}
-			
-			if(!ent->data.symbol.isLocal) {
-				X->text = sdscatfmt(X->text, ".global %s\n", ent->name);
-			}
-			
-			size_t typeSize = type_size(ent->type);
-			
-			if(ast->statementDecl.expression) {
-				AST *expr = ast->statementDecl.expression;
-				X->text = sdscatfmt(X->text, "%s: .%s %i\n", ent->data.symbol.linkName, yasm_typename(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
-			} else {
-#ifdef SYNTAX_GAS
-				X->text = sdscatfmt(X->text, "%s: .skip %i\n", ent->data.symbol.linkName, typeSize);
-#else
-				X->text = sdscatfmt(X->text, "%s: resb %i\n", ent->data.symbol.linkName, typeSize);
+			if(ent->data.symbol.isExternal) {
+#ifndef SYNTAX_GAS /* GAS considers all undefined symbols to be external */
+				X->text = sdscatfmt(X->text, "extern %s\n", ent->data.symbol.linkName);
 #endif
+			} else {
+				if(ast->statementDecl.expression->expression.constantType == EXPRESSION_NOT_CONSTANT) {
+					fputs("Symbol declaration may contain constant expressions only.\n", stderr);
+					abort();
+				}
+				
+				if(!ent->data.symbol.isLocal) {
+					X->text = sdscatfmt(X->text, ".global %s\n", ent->name);
+				}
+				
+				size_t typeSize = type_size(ent->type);
+				
+				if(ast->statementDecl.expression) {
+					AST *expr = ast->statementDecl.expression;
+					X->text = sdscatfmt(X->text, "%s: .%s %i\n", ent->data.symbol.linkName, yasm_directname(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
+				} else {
+#ifdef SYNTAX_GAS
+					X->text = sdscatfmt(X->text, "%s: .skip %i\n", ent->data.symbol.linkName, typeSize);
+#else
+					X->text = sdscatfmt(X->text, "%s: resb %i\n", ent->data.symbol.linkName, typeSize);
+#endif
+				}
 			}
 		} else if(ent->kind == VARTABLEENTRY_VAR) {
 			X86VarEntryInfo *info = ent->userdata = malloc(sizeof(*info));
 			info->isInRegister = 1;
-			info->id = x86_visit_expression(X, ast->statementDecl.expression, ent->type->primitive.width / 8);
+			info->id = x86_visit_expression(X, ast->statementDecl.expression, type_size(ent->type));
 		}
 	} else if(ast->nodeKind == AST_STATEMENT_IF) {
 		switch(ast->statementIf.expression->expression.constantType) {
@@ -195,7 +336,7 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 
 			x86_visit_chunk(X, ast->statementIf.then);
 
-			X->text = sdscatfmt(X->text, ".L%i:", X->lidx++);
+			X->text = sdscatfmt(X->text, ".L%i:\n", X->lidx++);
 			break;
 		}
 		case EXPRESSION_CONSTANT_TRUTHY: {
@@ -205,6 +346,31 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 		default:
 			break;
 		}
+	} else if(ast->nodeKind == AST_STATEMENT_LOOP) {
+		int idStart = X->lidx++;
+		int idEnd = X->lidx++;
+		
+		X->loopStack[X->loopStackIndex++] = idEnd; // TODO: check for overflow
+		
+		X->text = sdscatfmt(X->text, ".L%i:\n", idStart);
+		
+		x86_visit_chunk(X, ast->statementLoop.body);
+		
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "jmp $.L%i\n", idStart);
+#else
+		X->text = sdscatfmt(X->text, "jmp .L%i\n", idStart);
+#endif
+		
+		X->text = sdscatfmt(X->text, ".L%i:\n", idEnd);
+		
+		X->loopStackIndex--;
+	} else if(ast->nodeKind == AST_STATEMENT_BREAK) {
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "jmp $.L%i\n", X->loopStack[X->loopStackIndex]);
+#else
+		X->text = sdscatfmt(X->text, "jmp .L%i\n", X->loopStack[X->loopStackIndex]);
+#endif
 	} else {
 		abort(); /* TODO: better error handling, maybe with setjmp? */
 		return NULL;

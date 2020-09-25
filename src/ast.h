@@ -6,13 +6,17 @@
 #include"vartable.h"
 
 typedef enum {
-	AST_CHUNK, AST_STATEMENT_DECL, AST_TYPE_IDENTIFIER, AST_EXPRESSION_PRIMITIVE, AST_STATEMENT_IF, AST_EXPRESSION_BINARY_OP, AST_EXPRESSION_VAR, AST_TYPE_POINTER
+	AST_CHUNK, AST_STATEMENT_DECL, AST_TYPE_IDENTIFIER, AST_EXPRESSION_PRIMITIVE, AST_STATEMENT_IF, AST_EXPRESSION_BINARY_OP, AST_EXPRESSION_VAR, AST_TYPE_POINTER, AST_EXPRESSION_UNARY_OP, AST_STATEMENT_LOOP, AST_STATEMENT_BREAK, AST_EXPRESSION_CALL
 } ASTKind;
 
 typedef enum {
 	BINOP_ADD = 0, BINOP_SUB = 1, BINOP_MUL = 2, BINOP_DIV = 3
 } BinaryOp;
 extern int BINOP_COMMUTATIVE[];
+
+typedef enum {
+	UNOP_DEREF = 0
+} UnaryOp;
 
 typedef enum {
 	EXPRESSION_CONSTANT_TRUTHY,
@@ -24,7 +28,7 @@ union AST;
 
 typedef struct {
 	ASTKind nodeKind;
-	TypePrimitive *type;
+	Type *type;
 	ASTExpressionConstantType constantType;
 } ASTExpression;
 
@@ -47,8 +51,22 @@ typedef struct {
 typedef struct {
 	ASTExpression;
 	
+	UnaryOp operator;
+	union AST *chaiuld;
+} ASTExpressionUnaryOp;
+
+typedef struct {
+	ASTExpression;
+	
 	VarTableEntry *thing;
 } ASTExpressionVar;
+
+typedef struct {
+	ASTExpression;
+	
+	union AST *what;
+	union AST **args;
+} ASTExpressionCall;
 
 typedef struct {
 	ASTKind nodeKind;
@@ -96,6 +114,16 @@ typedef struct {
 	ASTChunk *then;
 } ASTStatementIf;
 
+typedef struct {
+	ASTStatement;
+	
+	ASTChunk *body;
+} ASTStatementLoop;
+
+typedef struct {
+	ASTStatement;
+} ASTStatementBreak;
+
 typedef union AST {
 	ASTKind nodeKind;
 	
@@ -103,10 +131,14 @@ typedef union AST {
 	ASTStatement statement;
 	ASTStatementDecl statementDecl;
 	ASTStatementIf statementIf;
+	ASTStatementLoop statementLoop;
+	ASTStatementBreak statementBreak;
 	ASTExpression expression;
 	ASTExpressionPrimitive expressionPrimitive;
 	ASTExpressionBinaryOp expressionBinaryOp;
+	ASTExpressionUnaryOp expressionUnaryOp;
 	ASTExpressionVar expressionVar;
+	ASTExpressionCall expressionCall;
 } AST;
 
 AST *ast_expression_optimize(AST*);

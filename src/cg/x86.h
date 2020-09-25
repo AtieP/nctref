@@ -19,6 +19,9 @@ typedef struct {
 	size_t lidx; // ID of next .L label
 	size_t stackDepth;
 	
+	size_t loopStack[64];
+	size_t loopStackIndex;
+	
 	X86Target target;
 	X86Mode mode;
 	
