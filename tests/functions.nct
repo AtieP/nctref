@@ -1,0 +1,3 @@
+extern u8() getc;
+
+u8 a = getc();
