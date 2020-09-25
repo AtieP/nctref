@@ -8,7 +8,7 @@ PREFIX = /usr/local
 .PHONY: install clean
 
 ntc: $(SOURCES) $(HEADERS)
-	cc -o ntc -std=gnu99 -Og -g -fms-extensions -Isrc $(SOURCES)
+	cc -Wall -o ntc -std=gnu99 -Og -g -fms-extensions -Isrc $(SOURCES)
 
 install: ntc
 	mv ./ntc $(PREFIX)/bin

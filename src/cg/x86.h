@@ -37,4 +37,6 @@ void x86_new(X86*);
 
 void x86_visit_chunk(X86*, ASTChunk*);
 
+void x86_finish(X86*);
+
 #endif

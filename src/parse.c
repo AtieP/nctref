@@ -183,6 +183,8 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 		
 		return ret;
 	}
+	
+	return NULL;
 }
 
 Type *nct_parse_typename(Parser *P) {

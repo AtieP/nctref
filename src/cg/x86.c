@@ -388,8 +388,8 @@ void x86_visit_chunk(X86 *X, ASTChunk *chunk) {
 
 void x86_finish(X86 *X) {
 #ifdef SYNTAX_GAS
-	fprintf(stdout, ".section .text\n%.*s", sdslen(X->text), X->text);
+	fprintf(stdout, ".section .text\n%.*s", (int) sdslen(X->text), X->text);
 #else
-	fprintf(stdout, "section .text\n%.*s", sdslen(X->text), X->text);
+	fprintf(stdout, "section .text\n%.*s", (int) sdslen(X->text), X->text);
 #endif
 }

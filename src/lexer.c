@@ -127,6 +127,7 @@ Token nct_tokenize(FILE *f) {
 	}
 
 	stahp("Invalid character '%c'", c);
+	return (Token) {};
 }
 
 Token *nct_lex(FILE *f) {
@@ -147,4 +148,6 @@ Token *nct_lex(FILE *f) {
 			list = realloc(list, sizeof(*list) * length);
 		}
 	}
+	
+	return list;
 }
