@@ -149,5 +149,5 @@ Token *nct_lex(FILE *f) {
 		}
 	}
 	
-	return list;
+	return NULL; /* Doesn't reach here. */
 }
