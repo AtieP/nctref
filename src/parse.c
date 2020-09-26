@@ -88,9 +88,23 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			astop->type = type_pointer_wrap((Type*) astop->chaiuld->expression.type);
 			
 			return (AST*) astop;
-		}
-		
-		return nct_parse_expression(P, lOP + 1);
+		} else if(maybe(P, TOKEN_MINUS)) {
+			AST *chaiuld = nct_parse_expression(P, lOP);
+			
+			if(chaiuld->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+				chaiuld->expressionPrimitive.numerator *= -1;
+				return chaiuld;
+			} else {
+				ASTExpressionUnaryOp *astop = malloc(sizeof(*astop));
+				astop->nodeKind = AST_EXPRESSION_UNARY_OP;
+				astop->constantType = EXPRESSION_NOT_CONSTANT;
+				astop->operator = UNOP_NEGATE;
+				astop->chaiuld = chaiuld;
+				astop->type = chaiuld->expression.type;
+
+				return (AST*) astop;
+			}
+		} else return nct_parse_expression(P, lOP + 1);
 	} else if(lOP == 2) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 
@@ -140,8 +154,6 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			
 			ret = (AST*) astop;
 		}
-		
-		ret = ast_expression_optimize(ret);
 		
 		return ret;
 	} else if(lOP == 0) {

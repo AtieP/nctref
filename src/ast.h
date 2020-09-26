@@ -15,7 +15,7 @@ typedef enum {
 extern int BINOP_COMMUTATIVE[];
 
 typedef enum {
-	UNOP_DEREF = 0
+	UNOP_DEREF = 0, UNOP_NEGATE = 1
 } UnaryOp;
 
 typedef enum {
