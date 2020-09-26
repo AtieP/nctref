@@ -81,7 +81,7 @@ TypePrimitive *primitive_parse(const char *src) {
 size_t type_size(Type *t) {
 	if(t->type == TYPE_TYPE_PRIMITIVE) {
 		/* Round to nearest highest power of two. */
-		uint16_t w = t->primitive.width;
+		uint16_t w = (t->primitive.width + 7) / 8;
 		w--;
 		w |= w >> 1;
 		w |= w >> 2;
@@ -89,7 +89,7 @@ size_t type_size(Type *t) {
 		w |= w >> 8;
 		w++;
 		
-		return w / 8;
+		return w;
 	} else if(t->type == TYPE_TYPE_POINTER) {
 		return 4;
 	}
