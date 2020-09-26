@@ -171,6 +171,14 @@ static void gpopr(X86 *X, const char *reg) {
 #endif
 }
 
+static void gglobal(X86 *X, const char *sym) {
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, ".global %s\n", sym);
+#else
+	X->text = sdscatfmt(X->text, "global %s\n", sym);
+#endif
+}
+
 void x86_new(X86 *X) {
 	X->text = sdsempty();
 	X->lidx = 0;
@@ -301,14 +309,18 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 				}
 				
 				if(!ent->data.symbol.isLocal) {
-					X->text = sdscatfmt(X->text, ".global %s\n", ent->name);
+					gglobal(X, ent->name);
 				}
 				
 				size_t typeSize = type_size(ent->type);
 				
 				if(ast->statementDecl.expression) {
 					AST *expr = ast->statementDecl.expression;
+#ifdef SYNTAX_GAS
 					X->text = sdscatfmt(X->text, "%s: .%s %i\n", ent->data.symbol.linkName, yasm_directname(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
+#else
+					X->text = sdscatfmt(X->text, "%s: %s %i\n", ent->data.symbol.linkName, yasm_directname(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
+#endif
 				} else {
 #ifdef SYNTAX_GAS
 					X->text = sdscatfmt(X->text, "%s: .skip %i\n", ent->data.symbol.linkName, typeSize);
