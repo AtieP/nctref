@@ -1,3 +1,3 @@
-extern u8() getc;
+extern u32() getc;
 
-u8 a = getc();
+u32 a = getc();
