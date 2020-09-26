@@ -1,7 +1,8 @@
 u32 x: 5;
 loop {
 	u16* y = 257;
-	u8 z = 3 + *y + x;
+	u4 z = 3 + *y + x;
+	u9 w = -4;
 	
 	if(x) {
 		break;
