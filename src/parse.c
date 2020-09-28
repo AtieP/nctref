@@ -5,6 +5,7 @@
 #include<string.h>
 #include"utils.h"
 #include"vartable.h"
+#include"reporting.h"
 
 typedef struct {
 	Token *tokens;
@@ -52,6 +53,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 		if(peek(P, 0).type == TOKEN_NUMBER) {
 			ASTExpressionPrimitive *ret = malloc(sizeof(*ret));
 			ret->nodeKind = AST_EXPRESSION_PRIMITIVE;
+			ret->type = (Type*) primitive_parse("s32");
 			
 			Token tok = get(P);
 			
@@ -73,6 +75,8 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			ret->nodeKind = AST_EXPRESSION_VAR;
 			
 			ret->thing = vartable_find(P->scope, get(P).content);
+			
+			ret->type = ret->thing->type;
 			
 			ret->constantType = EXPRESSION_NOT_CONSTANT;
 			
@@ -109,9 +113,14 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 
 		while(maybe(P, TOKEN_PAREN_L)) {
+			if(ret->expression.type->type != TYPE_TYPE_FUNCTION) {
+				stahp("Only function types may be called.");
+			}
+			
 			ASTExpressionCall *call = malloc(sizeof(*ret));
 			call->nodeKind = AST_EXPRESSION_CALL;
 			call->constantType = EXPRESSION_NOT_CONSTANT;
+			call->type = ret->expression.type->function.ret;
 			call->what = ret;
 			call->args = NULL;
 			ret = (AST*) call;

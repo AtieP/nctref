@@ -1,6 +1,9 @@
 #include"regalloc.h"
 
-int ralloc_alloc(RegisterAllocator *this, uint8_t size) {
+#include<stdlib.h>
+#include<string.h>
+
+int ralloc_alloc(RegisterAllocator *this, void *userdata, uint8_t size) {
 	uint8_t i;
 	for(i = 0; i < this->registersCount; i++) {
 		if(this->registers[i].state == REGISTER_FREE && size == this->registers[i].size) {
@@ -12,10 +15,14 @@ int ralloc_alloc(RegisterAllocator *this, uint8_t size) {
 found:;
 	Register *r = &this->registers[i];
 	r->state = REGISTER_ALLOCATED;
+	r->userdata = userdata;
 	
-	for(int b = 0; b < sizeof(r->aliasBitmap) * 8; b++) {
+	for(int b = 0; b < (sizeof(r->aliasBitmap) * 8) && b < this->registersCount; b++) {
 		if(b != i && (r->aliasBitmap & (1 << b))) {
-			this->registers[b].state = REGISTER_ALIASED_ALLOCATED;
+			if(this->registers[b].state != REGISTER_DOESNT_EXIST) {
+				this->registers[b].state = REGISTER_ALIASED_ALLOCATED;
+				this->registers[b].userdata = userdata;
+			}
 		}
 	}
 	
@@ -25,10 +32,21 @@ found:;
 void ralloc_free(RegisterAllocator *this, int i) {
 	Register *r = &this->registers[i];
 	r->state = REGISTER_FREE;
+	r->userdata = NULL;
 	
-	for(int b = 0; b < sizeof(r->aliasBitmap) * 8; b++) {
+	for(int b = 0; b < sizeof(r->aliasBitmap) * 8 && b < this->registersCount; b++) {
 		if(b != i && (r->aliasBitmap & (1 << b))) {
-			this->registers[b].state = REGISTER_FREE;
+			if(this->registers[b].state != REGISTER_DOESNT_EXIST) {
+				this->registers[b].state = REGISTER_FREE;
+				this->registers[b].userdata = NULL;
+			}
 		}
 	}
+}
+
+int ralloc_findname(RegisterAllocator *this, const char *name) {
+	for(int i = 0; i < this->registersCount; i++) {
+		if(!strcmp(this->registers[i].name, name)) return i;
+	}
+	return -1;
 }

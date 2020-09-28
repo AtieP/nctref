@@ -5,31 +5,36 @@
 //~ #define SYNTAX_GAS
 
 static uint8_t register_size(int i) {
-	return 1 << (i / 5);
+	return 1 << (i / 6);
 }
 
 static int cast_register(int i, uint8_t size) {
-	return (__builtin_ctz(size) * 5) + (i % 5);
+	return (__builtin_ctz(size) * 6) + (i % 6);
 }
 
 static RegisterAllocator *create_ralloc(X86 *X) {
-	RegisterAllocator *a = malloc(sizeof(*a) + sizeof(Register) * 15);
-	a->registersCount = 15;
-	a->registers[0] = (Register) {.name = "al", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 1057};
-	a->registers[1] = (Register) {.name = "bl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 2114};
-	a->registers[2] = (Register) {.name = "cl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 4228};
-	a->registers[3] = (Register) {.name = "dl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 8456};
-	a->registers[4] = (Register) {.name = "sil", .state = X->mode == X86_MODE_64 ? REGISTER_FREE : REGISTER_DOESNT_EXIST, .size = 1, .aliasBitmap = 16912}; /* Is sil also available in 32-bit long mode? */
-	a->registers[5] = (Register) {.name = "ax", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 1057};
-	a->registers[6] = (Register) {.name = "bx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 2114};
-	a->registers[7] = (Register) {.name = "cx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 4228};
-	a->registers[8] = (Register) {.name = "dx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 8456};
-	a->registers[9] = (Register) {.name = "si", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 16912};
-	a->registers[10] = (Register) {.name = "eax", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 1057};
-	a->registers[11] = (Register) {.name = "ebx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 2114};
-	a->registers[12] = (Register) {.name = "ecx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 4228};
-	a->registers[13] = (Register) {.name = "edx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 8456};
-	a->registers[14] = (Register) {.name = "esi", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 16912};
+	RegisterState sildil = X->mode == X86_MODE_64 ? REGISTER_FREE : REGISTER_DOESNT_EXIST; /* Is sil & dil also available in 32-bit long mode? */
+	
+	RegisterAllocator *a = malloc(sizeof(RegisterAllocator) + sizeof(Register) * 18);
+	a->registersCount = 18;
+	a->registers[0] = (Register) {.name = "al", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 4161};
+	a->registers[1] = (Register) {.name = "bl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 8322};
+	a->registers[2] = (Register) {.name = "cl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 16644};
+	a->registers[3] = (Register) {.name = "dl", .state = REGISTER_FREE, .size = 1, .aliasBitmap = 33288};
+	a->registers[4] = (Register) {.name = "sil", .state = sildil, .size = 1, .aliasBitmap = 66576};
+	a->registers[5] = (Register) {.name = "dil", .state = sildil, .size = 1, .aliasBitmap = 133152};
+	a->registers[6] = (Register) {.name = "ax", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 4161};
+	a->registers[7] = (Register) {.name = "bx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 8322};
+	a->registers[8] = (Register) {.name = "cx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 16644};
+	a->registers[9] = (Register) {.name = "dx", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 33288};
+	a->registers[10] = (Register) {.name = "si", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 66576};
+	a->registers[11] = (Register) {.name = "di", .state = REGISTER_FREE, .size = 2, .aliasBitmap = 133152};
+	a->registers[12] = (Register) {.name = "eax", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 4161};
+	a->registers[13] = (Register) {.name = "ebx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 8322};
+	a->registers[14] = (Register) {.name = "ecx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 16644};
+	a->registers[15] = (Register) {.name = "edx", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 33288};
+	a->registers[16] = (Register) {.name = "esi", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 66576};
+	a->registers[17] = (Register) {.name = "edi", .state = REGISTER_FREE, .size = 4, .aliasBitmap = 133152};
 	return a;
 }
 
@@ -88,55 +93,174 @@ static char *yasm_sizespecifier(int bytes) {
 	return NULL;
 }
 
-static void gmovi(X86 *X, const char *dst, size_t val) {
-#ifdef SYNTAX_GAS
-	X->text = sdscatfmt(X->text, "mov $%i, %%%s\n", val, dst);
-#else
-	X->text = sdscatfmt(X->text, "mov %s, %i\n", dst, val);
-#endif
-}
-
-static void gmovr(X86 *X, int zx, const char *dst, const char *src) {
-#ifdef SYNTAX_GAS
-	X->text = sdscatfmt(X->text, "mov%s %%%s, %%%s\n", zx ? "zx" : "", src, dst);
-#else
-	X->text = sdscatfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", dst, src);
-#endif
-}
-
-static void gaddi(X86 *X, const char *dst, size_t val) {
-#ifdef SYNTAX_GAS
-	X->text = sdscatfmt(X->text, "add $%i, %%%s\n", val, dst);
-#else
-	X->text = sdscatfmt(X->text, "add %s, %i\n", dst, val);
-#endif
-}
-
-static void gaddr(X86 *X, const char *dst, const char *src) {
-#ifdef SYNTAX_GAS
-	X->text = sdscatfmt(X->text, "add %%%s, %%%s\n", src, dst);
-#else
-	X->text = sdscatfmt(X->text, "add %s, %s\n", dst, src);
-#endif
-}
-
-static void gtest1(X86 *X, const char *reg) {
-#ifdef SYNTAX_GAS
-	X->text = sdscatfmt(X->text, "test %%%s, %%%s\n", reg, reg);
-#else
-	X->text = sdscatfmt(X->text, "test %s, %s\n", reg, reg);
-#endif
-}
-
-static void gmovsym(X86 *X, int dstSize, int srcSize, const char *dst, const char *src) {
-	int zx = dstSize > srcSize;
+/* Use when a register is necessary, else use x86_allocate, which may use the stack instead. */
+static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
+	X86AllocationInfo *n = malloc(sizeof(*n));
+	n->strategy = X86_ALLOC_REG;
+	n->size = sz;
 	
+	int ret = ralloc_alloc(X->rallocator, n, sz);
+	if(ret != -1) {
+		n->regId = ret;
+		return n;
+	}
+	
+	ret = cast_register(ralloc_findname(X->rallocator, "edi"), sz); /* There's no particular reason to use edi here. */
+	
+	X86AllocationInfo *o = X->rallocator->registers[ret].userdata;
+	o->strategy = X86_ALLOC_STACK;
+	o->stackDepth = X->stackDepth -= ((o->size + 3) % 4);
+	
+	n->regId = ralloc_alloc(X->rallocator, n, sz);
+	return n;
+}
+
+static X86AllocationInfo *x86_allocate(X86 *X, size_t sz) {
+	X86AllocationInfo *ret = malloc(sizeof(*ret));
+	ret->size = sz;
+	
+	int reg = ralloc_alloc(X->rallocator, ret, sz);
+	if(reg != -1) {
+		ret->strategy = X86_ALLOC_REG;
+		ret->regId = reg;
+	} else {
+		ret->strategy = X86_ALLOC_STACK;
+		ret->stackDepth = X->stackDepth -= ((sz + 3) % 4);
+	}
+	
+	return ret;
+}
+
+static void x86_free(X86 *X, X86AllocationInfo *info) {
+	if(info->strategy == X86_ALLOC_REG) {
+		ralloc_free(X->rallocator, info->regId);
+	}
+	free(info);
+}
+
+static void x86_move2reg(X86 *X, X86AllocationInfo *info) {
+	info->strategy = X86_ALLOC_REG;
+	
+	int ret = ralloc_alloc(X->rallocator, info, info->size);
+	if(ret != -1) {
+		info->regId = ret;
+		return;
+	}
+	
+	ret = cast_register(ralloc_findname(X->rallocator, "edi"), info->size); /* Again, no reason to use edi in particular. */
+	
+	X86AllocationInfo *o = X->rallocator->registers[ret].userdata;
+	o->strategy = X86_ALLOC_STACK;
+	o->stackDepth = X->stackDepth -= ((o->size + 3) % 4);
+	
+	info->regId = ret;
+	return;
+}
+
+static sds gdescribeinfo(X86 *X, X86AllocationInfo *info) {
 #ifdef SYNTAX_GAS
-	//~ X->text = sdscatfmt(X->text, "mov%s %s, %%%s\n", zx ? "zx" : "", src, dst);
-	#error Unsupported for now.
+	switch(info->strategy) {
+	case X86_ALLOC_REG:
+		return sdscatfmt(sdsempty(), "%%%s", X->rallocator->registers[info->regId].name);
+	case X86_ALLOC_STACK:
+		return sdscatfmt(sdsempty(), "%i(%%esp)", X->stackDepth - info->stackDepth);
+	case X86_ALLOC_MEM:
+		return sdscatfmt(sdsempty(), "%s", info->memName);
+	}
 #else
-	X->text = sdscatfmt(X->text, "mov%s %s, %s [%s]\n", zx ? "zx" : "", dst, yasm_sizespecifier(srcSize), src);
+	switch(info->strategy) {
+	case X86_ALLOC_REG:
+		return sdscatfmt(sdsempty(), "%s", X->rallocator->registers[info->regId].name);
+	case X86_ALLOC_STACK:
+		return sdscatfmt(sdsempty(), "[esp %+i]", X->stackDepth - info->stackDepth);
+	case X86_ALLOC_MEM:
+		return sdscatfmt(sdsempty(), "[%s]", info->memName);
+	}
 #endif
+	return NULL;
+}
+
+static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
+	sds i = gdescribeinfo(X, info);
+	if(val == 0 && info->strategy == X86_ALLOC_REG) {
+		X->text = sdscatfmt(X->text, "xor %S, %S\n", i, i);
+	} else {
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "mov $%i, %S\n", val, i);
+#else
+		X->text = sdscatfmt(X->text, "mov %S, %i\n", i, val);
+#endif
+	}
+	sdsfree(i);
+}
+
+static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
+	sds s = gdescribeinfo(X, src), d = gdescribeinfo(X, dst);
+	
+	int zx = dst->size > src->size;
+	
+	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "mov%s %%%s, %%%s\n", zx ? "zx" : "", s, d);
+#else
+		X->text = sdscatfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
+#endif
+	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		
+		gmov(X, tmp, src);
+		gmov(X, dst, tmp);
+		
+		x86_free(X, tmp);
+	}
+	sdsfree(s);
+	sdsfree(d);
+}
+
+static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
+	sds i = gdescribeinfo(X, info);
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "add $%i, %S\n", val, i);
+#else
+	X->text = sdscatfmt(X->text, "add %S, %i\n", i, val);
+#endif
+	sdsfree(i);
+}
+
+static void gadd(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
+	sds s = gdescribeinfo(X, src);
+	sds d = gdescribeinfo(X, dst);
+	
+	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "add %%%s, %%%s\n", s, d);
+#else
+		X->text = sdscatfmt(X->text, "add %s, %s\n", d, s);
+#endif
+	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		
+		gmov(X, tmp, src);
+		gadd(X, dst, tmp);
+		
+		x86_free(X, tmp);
+	}
+	sdsfree(s);
+	sdsfree(d);
+}
+
+static void gcmp0(X86 *X, X86AllocationInfo *info) {
+	sds i = gdescribeinfo(X, info);
+	if(info->strategy == X86_ALLOC_REG) {
+		X->text = sdscatfmt(X->text, "test %S, %S\n", i, i);
+	} else {
+#ifdef SYNTAX_GAS
+		X->text = sdscatfmt(X->text, "cmp $0, %S\n", i);
+#else
+		X->text = sdscatfmt(X->text, "cmp %S, 0\n", i);
+#endif
+	}
+	sdsfree(i);
 }
 
 static void gcallr(X86 *X, const char *reg) {
@@ -179,6 +303,23 @@ static void gglobal(X86 *X, const char *sym) {
 #endif
 }
 
+static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
+	if(dst->strategy != X86_ALLOC_REG) {
+		x86_move2reg(X, dst);
+	}
+	
+	sds d = gdescribeinfo(X, dst), s = gdescribeinfo(X, src);
+	
+#ifdef SYNTAX_GAS
+	X->text = sdscatfmt(X->text, "mov (%S), %S\n", s, d);
+#else
+	X->text = sdscatfmt(X->text, "mov %S, [%S]\n", d, s);
+#endif
+	
+	sdsfree(d);
+	sdsfree(s);
+}
+
 void x86_new(X86 *X) {
 	X->text = sdsempty();
 	X->lidx = 0;
@@ -192,106 +333,63 @@ void x86_new(X86 *X) {
 	X->rallocator = create_ralloc(X);
 }
 
-int x86_visit_expression(X86 *X, AST *ast, size_t coerceToSize) {
-	if(coerceToSize == -1) coerceToSize = 4;
-
+X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst) {
 	if(ast->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-		int dst = ralloc_alloc(X->rallocator, coerceToSize);
-
-		gmovi(X, X->rallocator->registers[dst].name, ast->expressionPrimitive.numerator / ast->expressionPrimitive.denominator);
-
+		if(!dst) dst = x86_allocate(X, 4);
+		
+		gmovi(X, dst, ast->expressionPrimitive.numerator / ast->expressionPrimitive.denominator);
+		
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_VAR) {
-		int dst = ralloc_alloc(X->rallocator, coerceToSize);
+		//~ int dst = ralloc_alloc(X->rallocator, coerceToSize);
 		
-		if(ast->expressionVar.thing->kind == VARTABLEENTRY_VAR) {
-			int src = ((X86VarEntryInfo*) ast->expressionVar.thing->userdata)->id;
+		//~ if(ast->expressionVar.thing->kind == VARTABLEENTRY_VAR) {
+			//~ int src = ((X86AllocationInfo*) ast->expressionVar.thing->userdata)->id;
 			
-			// fixes "mov al, bx"
-			if(register_size(src) > register_size(dst)) src = cast_register(src, register_size(dst));
+			//~ // fixes "mov al, bx"
+			//~ if(register_size(src) > register_size(dst)) src = cast_register(src, register_size(dst));
 			
-			gmovr(X, register_size(dst) > register_size(src), X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
-		} else if(ast->expressionVar.thing->kind == VARTABLEENTRY_SYMBOL) {
-			gmovsym(X, coerceToSize, coerceToSize, X->rallocator->registers[dst].name, ast->expressionVar.thing->data.symbol.linkName);
+			//~ gmovr(X, register_size(dst) > register_size(src), X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
+		//~ } else if(ast->expressionVar.thing->kind == VARTABLEENTRY_SYMBOL) {
+			//~ gmovsym(X, coerceToSize, coerceToSize, X->rallocator->registers[dst].name, ast->expressionVar.thing->data.symbol.linkName);
+		//~ }
+		
+		//~ return dst;
+		
+		X86AllocationInfo *vi = ast->expressionVar.thing->userdata;
+		if(dst) { /* copy */
+			gmov(X, dst, vi);
+			return dst;
+		} else {
+			return vi;
 		}
-		
-		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
-		int dst = x86_visit_expression(X, ast->expressionBinaryOp.operands[0], coerceToSize);
+		if(!dst) dst = x86_allocate(X, 4);
+		
+		x86_visit_expression(X, ast->expressionBinaryOp.operands[0], dst);
 		
 		for(size_t i = 1; i < ast->expressionBinaryOp.amountOfOperands; i++) {
 			AST *operand = ast->expressionBinaryOp.operands[i];
 			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-				gaddi(X, X->rallocator->registers[dst].name, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
-			} else if(operand->nodeKind == AST_EXPRESSION_VAR && operand->expressionVar.thing->kind == VARTABLEENTRY_VAR) {
-				int addend = ((X86VarEntryInfo*) operand->expressionVar.thing->userdata)->id;
-
-				gaddr(X, X->rallocator->registers[dst].name, X->rallocator->registers[cast_register(addend, register_size(dst))].name);
+				gaddi(X, dst, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
 			} else {
-				int addend = x86_visit_expression(X, operand, coerceToSize);
-				gaddr(X, X->rallocator->registers[dst].name, X->rallocator->registers[addend].name);
-				ralloc_free(X->rallocator, addend);
+				gadd(X, dst, x86_visit_expression(X, operand, NULL));
 			}
 		}
 		
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_UNARY_OP) {
-		AST *chaiuld = ast->expressionUnaryOp.chaiuld;
+		if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
 		
-		if(chaiuld->nodeKind == AST_EXPRESSION_VAR) {
-			int dst = ralloc_alloc(X->rallocator, coerceToSize);
-			int src = ((X86VarEntryInfo*) chaiuld->expressionVar.thing->userdata)->id;
-			
-#ifdef SYNTAX_GAS
-			X->text = sdscatfmt(X->text, "mov (%%%s), %%%s\n", X->rallocator->registers[src].name, X->rallocator->registers[dst].name);
-#else
-			X->text = sdscatfmt(X->text, "mov %s, [%s]\n", X->rallocator->registers[dst].name, X->rallocator->registers[src].name);
-#endif
-			
-			return dst;
-		} else {
-			int dst = x86_visit_expression(X, chaiuld, -1);
-			
-#ifdef SYNTAX_GAS
-			X->text = sdscatfmt(X->text, "mov (%%%s), %%%s\n", X->rallocator->registers[dst].name, X->rallocator->registers[cast_register(dst, coerceToSize)].name);
-#else
-			X->text = sdscatfmt(X->text, "mov %s, [%s]\n", X->rallocator->registers[cast_register(dst, coerceToSize)].name, X->rallocator->registers[dst].name);
-#endif
-			
-			return cast_register(dst, coerceToSize);
-		}
+		gderef(X, dst, x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL));
+		
+		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
-		if(ast->expressionCall.what->nodeKind == AST_EXPRESSION_VAR && ast->expressionCall.what->expressionVar.thing->kind == VARTABLEENTRY_SYMBOL) {
-			gpushr(X, "eax");
-			gpushr(X, "ecx");
-			gpushr(X, "edx");
-			
-			gcallsym(X, ast->expressionCall.what->expressionVar.thing->data.symbol.linkName);
-			
-			gpopr(X, "edx");
-			gpopr(X, "ecx");
-			gpopr(X, "eax");
-			
-			return 0;
-		} else {
-			int dst = x86_visit_expression(X, ast->expressionCall.what, -1);
-
-			gpushr(X, "eax");
-			gpushr(X, "ecx");
-			gpushr(X, "edx");
-			
-			gcallr(X, X->rallocator->registers[dst].name);
-			
-			gpopr(X, "edx");
-			gpopr(X, "ecx");
-			gpopr(X, "eax");
-			
-			return dst;
-		}
+		/* TODO: add. */
 	}
 
 	abort();
-	return -1;
+	return NULL;
 }
 
 AST *x86_visit_statement(X86 *X, AST *ast) {
@@ -329,23 +427,30 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 #endif
 				}
 			}
+			
+			X86AllocationInfo *info = malloc(sizeof(*info));
+			info->strategy = X86_ALLOC_MEM;
+			info->memName = ent->data.symbol.linkName;
+			
+			ent->userdata = info;
 		} else if(ent->kind == VARTABLEENTRY_VAR) {
-			X86VarEntryInfo *info = ent->userdata = malloc(sizeof(*info));
-			info->isInRegister = 1;
-			info->id = x86_visit_expression(X, ast->statementDecl.expression, type_size(ent->type));
+			X86AllocationInfo *info = x86_allocate(X, type_size(ent->type));
+			x86_visit_expression(X, ast->statementDecl.expression, info);
+			
+			ent->userdata = info;
 		}
 	} else if(ast->nodeKind == AST_STATEMENT_IF) {
 		switch(ast->statementIf.expression->expression.constantType) {
 		case EXPRESSION_NOT_CONSTANT: {
-			const char *reg = X->rallocator->registers[x86_visit_expression(X, ast->statementIf.expression, 4)].name;
-
-			gtest1(X, reg);
+			X86AllocationInfo *info = x86_visit_expression(X, ast->statementIf.expression, NULL);
+			
+			gcmp0(X, info);
 #ifdef SYNTAX_GAS
 			X->text = sdscatfmt(X->text, "jz $.L%i\n", X->lidx);
 #else
 			X->text = sdscatfmt(X->text, "jz .L%i\n", X->lidx);
 #endif
-
+			
 			x86_visit_chunk(X, ast->statementIf.then);
 
 			X->text = sdscatfmt(X->text, ".L%i:\n", X->lidx++);

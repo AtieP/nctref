@@ -31,6 +31,7 @@ TypePrimitive *primitive_parse(const char *src) {
 		src++;
 		ret->isUnsigned = 1;
 	} else if(*src == 's') {
+		src++;
 		ret->isUnsigned = 0;
 	} else {
 		free(ret);

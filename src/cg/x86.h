@@ -28,10 +28,19 @@ typedef struct {
 	RegisterAllocator *rallocator;
 } X86;
 
+typedef enum {
+	X86_ALLOC_STACK, X86_ALLOC_REG, X86_ALLOC_MEM
+} X86AllocationStrategy;
+
 typedef struct {
-	int isInRegister;
-	int id;
-} X86VarEntryInfo;
+	X86AllocationStrategy strategy;
+	size_t size;
+	union {
+		int stackDepth;
+		int regId;
+		const char *memName;
+	};
+} X86AllocationInfo;
 
 void x86_new(X86*);
 
