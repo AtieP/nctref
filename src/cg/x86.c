@@ -2,8 +2,6 @@
 
 #include<stdlib.h>
 
-//~ #define SYNTAX_GAS
-
 static uint8_t register_size(int i) {
 	return 1 << (i / 6);
 }
@@ -68,15 +66,14 @@ static char *yasm_directname(int bytes) {
 static char *yasm_sizespecifier(int bytes) {
 	switch(bytes) {
 #ifdef SYNTAX_GAS
-	//~ case 1:
-		//~ return "byte";
-	//~ case 2:
-		//~ return "word";
-	//~ case 4:
-		//~ return "long";
-	//~ case 8:
-		//~ return "quad";
-	#error Unsupported.
+	case 1:
+		return "b";
+	case 2:
+		return "w";
+	case 4:
+		return "l";
+	case 8:
+		return "q";
 #else
 	case 1:
 		return "byte";
