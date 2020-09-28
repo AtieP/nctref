@@ -188,7 +188,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = sdscatfmt(X->text, "mov%s%s%s %%%s, %%%s\n", zx ? "z" : "", zx ? yasm_directname(src->size) : "", zx ? yasm_directname(dst->size) : "", s, d);
+		X->text = sdscatfmt(X->text, "mov%s%s%s %S, %S\n", zx ? "z" : "", zx ? yasm_sizespecifier(src->size) : "", zx ? yasm_sizespecifier(dst->size) : "", s, d);
 #else
 		X->text = sdscatfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
