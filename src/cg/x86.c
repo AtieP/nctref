@@ -95,6 +95,7 @@ static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
 	X86AllocationInfo *n = malloc(sizeof(*n));
 	n->strategy = X86_ALLOC_REG;
 	n->size = sz;
+	n->refcount = 1;
 	
 	int ret = ralloc_alloc(X->rallocator, n, sz);
 	if(ret != -1) {
@@ -115,6 +116,7 @@ static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
 static X86AllocationInfo *x86_allocate(X86 *X, size_t sz) {
 	X86AllocationInfo *ret = malloc(sizeof(*ret));
 	ret->size = sz;
+	ret->refcount = 1;
 	
 	int reg = ralloc_alloc(X->rallocator, ret, sz);
 	if(reg != -1) {
@@ -129,56 +131,44 @@ static X86AllocationInfo *x86_allocate(X86 *X, size_t sz) {
 }
 
 static void x86_free(X86 *X, X86AllocationInfo *info) {
-	if(info->strategy == X86_ALLOC_REG) {
-		ralloc_free(X->rallocator, info->regId);
+	if(--info->refcount == 0) {
+		if(info->strategy == X86_ALLOC_REG) {
+			ralloc_free(X->rallocator, info->regId);
+		}
+		free(info);
 	}
-	free(info);
 }
 
-static void x86_move2reg(X86 *X, X86AllocationInfo *info) {
-	info->strategy = X86_ALLOC_REG;
+static sds gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) {
+	if(coerceToSize == -1) coerceToSize = info->size;
 	
-	int ret = ralloc_alloc(X->rallocator, info, info->size);
-	if(ret != -1) {
-		info->regId = ret;
-		return;
-	}
-	
-	ret = cast_register(ralloc_findname(X->rallocator, "edi"), info->size); /* Again, no reason to use edi in particular. */
-	
-	X86AllocationInfo *o = X->rallocator->registers[ret].userdata;
-	o->strategy = X86_ALLOC_STACK;
-	o->stackDepth = X->stackDepth -= ((o->size + 3) % 4);
-	
-	info->regId = ret;
-	return;
-}
-
-static sds gdescribeinfo(X86 *X, X86AllocationInfo *info) {
+	switch(info->strategy) {
+	case X86_ALLOC_REG: {
+		int id = cast_register(info->regId, coerceToSize);
 #ifdef SYNTAX_GAS
-	switch(info->strategy) {
-	case X86_ALLOC_REG:
-		return sdscatfmt(sdsempty(), "%%%s", X->rallocator->registers[info->regId].name);
-	case X86_ALLOC_STACK:
-		return sdscatfmt(sdsempty(), "%i(%%esp)", X->stackDepth - info->stackDepth);
-	case X86_ALLOC_MEM:
-		return sdscatfmt(sdsempty(), "%s", info->memName);
-	}
+		return sdscatfmt(sdsempty(), "%%%s", X->rallocator->registers[id].name);
 #else
-	switch(info->strategy) {
-	case X86_ALLOC_REG:
-		return sdscatfmt(sdsempty(), "%s", X->rallocator->registers[info->regId].name);
-	case X86_ALLOC_STACK:
-		return sdscatfmt(sdsempty(), "[esp %+i]", X->stackDepth - info->stackDepth);
-	case X86_ALLOC_MEM:
-		return sdscatfmt(sdsempty(), "[%s]", info->memName);
-	}
+		return sdscatfmt(sdsempty(), "%s", X->rallocator->registers[id].name);
 #endif
+	}
+	case X86_ALLOC_STACK:
+#ifdef SYNTAX_GAS
+		return sdscatfmt(sdsempty(), "%i(%%esp)", X->stackDepth - info->stackDepth);
+#else
+		return sdscatfmt(sdsempty(), "%s[esp%s%i]", yasm_sizespecifier(coerceToSize), (X->stackDepth - info->stackDepth) >= 0 ? "+" : "", X->stackDepth - info->stackDepth);
+#endif
+	case X86_ALLOC_MEM:
+#ifdef SYNTAX_GAS
+		return sdscatfmt(sdsempty(), "%s", info->memName);
+#else
+		return sdscatfmt(sdsempty(), "%s[%s]", yasm_sizespecifier(coerceToSize), info->memName);
+#endif
+	}
 	return NULL;
 }
 
 static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
-	sds i = gdescribeinfo(X, info);
+	sds i = gdescribeinfo(X, info, -1);
 	if(val == 0 && info->strategy == X86_ALLOC_REG) {
 		X->text = sdscatfmt(X->text, "xor %S, %S\n", i, i);
 	} else {
@@ -192,13 +182,13 @@ static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	sds s = gdescribeinfo(X, src), d = gdescribeinfo(X, dst);
+	sds s = gdescribeinfo(X, src, -1), d = gdescribeinfo(X, dst, -1);
 	
 	int zx = dst->size > src->size;
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = sdscatfmt(X->text, "mov%s %%%s, %%%s\n", zx ? "zx" : "", s, d);
+		X->text = sdscatfmt(X->text, "mov%s%s%s %%%s, %%%s\n", zx ? "z" : "", zx ? yasm_directname(src->size) : "", zx ? yasm_directname(dst->size) : "", s, d);
 #else
 		X->text = sdscatfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
@@ -215,7 +205,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 }
 
 static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
-	sds i = gdescribeinfo(X, info);
+	sds i = gdescribeinfo(X, info, -1);
 #ifdef SYNTAX_GAS
 	X->text = sdscatfmt(X->text, "add $%i, %S\n", val, i);
 #else
@@ -225,14 +215,14 @@ static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gadd(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	sds s = gdescribeinfo(X, src);
-	sds d = gdescribeinfo(X, dst);
+	sds s = gdescribeinfo(X, src, -1);
+	sds d = gdescribeinfo(X, dst, -1);
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = sdscatfmt(X->text, "add %%%s, %%%s\n", s, d);
+		X->text = sdscatfmt(X->text, "add %S, %S\n", s, d);
 #else
-		X->text = sdscatfmt(X->text, "add %s, %s\n", d, s);
+		X->text = sdscatfmt(X->text, "add %S, %S\n", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
 		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
@@ -247,7 +237,7 @@ static void gadd(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 }
 
 static void gcmp0(X86 *X, X86AllocationInfo *info) {
-	sds i = gdescribeinfo(X, info);
+	sds i = gdescribeinfo(X, info, -1);
 	if(info->strategy == X86_ALLOC_REG) {
 		X->text = sdscatfmt(X->text, "test %S, %S\n", i, i);
 	} else {
@@ -301,11 +291,7 @@ static void gglobal(X86 *X, const char *sym) {
 }
 
 static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	if(dst->strategy != X86_ALLOC_REG) {
-		x86_move2reg(X, dst);
-	}
-	
-	sds d = gdescribeinfo(X, dst), s = gdescribeinfo(X, src);
+	sds d = gdescribeinfo(X, dst, -1), s = gdescribeinfo(X, src, -1);
 	
 #ifdef SYNTAX_GAS
 	X->text = sdscatfmt(X->text, "mov (%S), %S\n", s, d);
@@ -358,6 +344,7 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			gmov(X, dst, vi);
 			return dst;
 		} else {
+			vi->refcount++;
 			return vi;
 		}
 	} else if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
@@ -370,7 +357,9 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
 				gaddi(X, dst, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
 			} else {
-				gadd(X, dst, x86_visit_expression(X, operand, NULL));
+				X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
+				gadd(X, dst, a);
+				x86_free(X, a);
 			}
 		}
 		
@@ -378,7 +367,9 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 	} else if(ast->nodeKind == AST_EXPRESSION_UNARY_OP) {
 		if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
 		
-		gderef(X, dst, x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL));
+		X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
+		gderef(X, dst, a);
+		x86_free(X, a);
 		
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
@@ -428,6 +419,8 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 			X86AllocationInfo *info = malloc(sizeof(*info));
 			info->strategy = X86_ALLOC_MEM;
 			info->memName = ent->data.symbol.linkName;
+			info->size = type_size(ent->type);
+			info->refcount = 1;
 			
 			ent->userdata = info;
 		} else if(ent->kind == VARTABLEENTRY_VAR) {

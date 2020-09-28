@@ -40,6 +40,7 @@ typedef struct {
 		int regId;
 		const char *memName;
 	};
+	int refcount;
 } X86AllocationInfo;
 
 void x86_new(X86*);
