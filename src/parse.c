@@ -338,6 +338,8 @@ AST *nct_parse_statement(Parser *P) {
 }
 
 ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {
+	P->scope = vartable_new(P->scope);
+	
 	ASTChunk *ret = malloc(sizeof(*ret));
 	ret->nodeKind = AST_CHUNK;
 	
@@ -347,10 +349,12 @@ ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {
 		ptr = &(((ASTStatement*) (*ptr))->next); // ok
 	}
 	
+	P->scope = P->scope->parent;
+	
 	return ret;
 }
 
 ASTChunk *nct_parse(Token *tokens) {
-	Parser P = {.tokens = tokens, .i = 0, .scope = vartable_new(NULL)};
+	Parser P = {.tokens = tokens, .i = 0, .scope = NULL};
 	return nct_parse_chunk(&P, 1);
 }
