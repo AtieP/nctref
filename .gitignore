@@ -2,3 +2,7 @@ a.out
 tests/*.o
 tests/*.asm
 ntc
+ntc.exe
+*.o
+*.err
+dos4gw.exe
