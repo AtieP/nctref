@@ -5,11 +5,11 @@
 #include<stdlib.h>
 
 /* Abort immediately on first error (for now) */
-void stahp(const char *error, ...) {
+void stahp(int row, int column, const char *error, ...) {
 	va_list l;
 	va_start(l, error);
 	
-	fputs("error ??:??: ", stderr);
+	fprintf(stderr, "error %i:%i: ", row, column);
 	vfprintf(stderr, error, l);
 	fputc('\n', stderr);
 	

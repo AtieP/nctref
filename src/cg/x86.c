@@ -304,21 +304,21 @@ static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
 	dstrfree(i);
 }
 
-static void gadd(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	dstr s = gdescribeinfo(X, src, -1);
-	dstr d = gdescribeinfo(X, dst, -1);
+static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int isSub) {
+	dstr s = gdescribeinfo(X, src, dst->size);
+	dstr d = gdescribeinfo(X, dst, dst->size);
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "add %S, %S\n", s, d);
+		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", s, d);
 #else
-		X->text = dstrfmt(X->text, "add %S, %S\n", d, s);
+		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
 		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
 		
 		gmov(X, tmp, src);
-		gadd(X, dst, tmp);
+		gaddsub(X, dst, tmp, isSub);
 		
 		x86_free(X, tmp);
 	}
@@ -448,7 +448,7 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 				gaddi(X, dst, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
 			} else {
 				X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
-				gadd(X, dst, a);
+				gaddsub(X, dst, a, ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB);
 				x86_free(X, a);
 			}
 		}

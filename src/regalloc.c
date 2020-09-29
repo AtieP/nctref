@@ -17,7 +17,7 @@ found:;
 	r->state = REGISTER_ALLOCATED;
 	r->userdata = userdata;
 	
-	for(int b = 0; b < (sizeof(r->aliasBitmap) * 8) && b < this->registersCount; b++) {
+	for(size_t b = 0; b < (sizeof(r->aliasBitmap) * 8) && b < this->registersCount; b++) {
 		if(b != i && (r->aliasBitmap & (1 << b))) {
 			if(this->registers[b].state != REGISTER_DOESNT_EXIST) {
 				this->registers[b].state = REGISTER_ALIASED_ALLOCATED;
@@ -34,7 +34,7 @@ void ralloc_free(RegisterAllocator *this, int i) {
 	r->state = REGISTER_FREE;
 	r->userdata = NULL;
 	
-	for(int b = 0; b < sizeof(r->aliasBitmap) * 8 && b < this->registersCount; b++) {
+	for(int b = 0; b < (int) sizeof(r->aliasBitmap) * 8 && b < this->registersCount; b++) {
 		if(b != i && (r->aliasBitmap & (1 << b))) {
 			if(this->registers[b].state != REGISTER_DOESNT_EXIST) {
 				this->registers[b].state = REGISTER_FREE;

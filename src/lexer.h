@@ -11,7 +11,7 @@ typedef enum {
 
 typedef struct {
 	TokenKind type;
-	
+	int row, column;
 	char *content; /* NULL for keywords. */
 } Token;
 

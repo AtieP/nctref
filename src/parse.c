@@ -114,7 +114,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 
 		while(maybe(P, TOKEN_PAREN_L)) {
 			if(ret->expression.type->type != TYPE_TYPE_FUNCTION) {
-				stahp("Only function types may be called.");
+				stahp(P->tokens[P->i].row, P->tokens[P->i].column, "Only function types may be called.");
 			}
 			
 			ASTExpressionCall *call = malloc(sizeof(*ret));
@@ -343,8 +343,10 @@ ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {
 	
 	ASTChunk *ret = malloc(sizeof(*ret));
 	ret->nodeKind = AST_CHUNK;
+	ret->statements = NULL;
 	
 	AST **ptr = &ret->statements;
+	
 	while(peek(P, 0).type != (isTopLevel ? TOKEN_EOF : TOKEN_SQUIGGLY_R)) {
 		*ptr = nct_parse_statement(P);
 		ptr = &(((ASTStatement*) (*ptr))->next); // ok

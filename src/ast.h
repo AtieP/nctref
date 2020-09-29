@@ -142,5 +142,6 @@ typedef union AST {
 } AST;
 
 AST *ast_expression_optimize(AST*);
+int ast_expression_equal(AST*, AST*);
 
 #endif

@@ -8,11 +8,11 @@
 #include<string.h>
 
 int main(int argc, char **argv) {
-	if(argc == 1) stahp("No file specified.");
+	if(argc == 1) stahp(3, 1415, "No file specified. Refer to the man page for instructions.");
 	
-	FILE *f = fopen(argv[1], "rb");
+	FILE *f = !strcmp(argv[1], "-") ? stdin : fopen(argv[1], "rb");
 	
-	if(!f) stahp("%s: %s", argv[1], strerror(errno));
+	if(!f) stahp(2, 7182, "%s: %s", argv[1], strerror(errno));
 	
 	Token *tokens = nct_lex(f);
 	

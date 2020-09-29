@@ -32,8 +32,9 @@ typedef struct {
 } dstrInternal;
 
 dstr dstrempty() {
-	dstrInternal *i = malloc(sizeof(dstrInternal) + 0);
+	dstrInternal *i = malloc(sizeof(dstrInternal) + 1);
 	i->length = 0;
+	i->data[0] = '\0';
 	return (dstr) i + sizeof(dstrInternal);
 }
 

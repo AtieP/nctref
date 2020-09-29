@@ -17,21 +17,48 @@ static int isNum(int c) {
 	return c >= '0' && c <= '9';
 }
 
-static int isAlphanum(char c) {
+static int isAlphanum(int c) {
 	return isAlpha(c) || isNum(c);
 }
 
-static int isWS(char c) {
+static int isWS(int c) {
 	return c == ' ' || c == '\n' || c == '\r' || c == '\b' || c == '\t';
 }
 
-Token nct_tokenize(FILE *f) {
-	int c = fgetc(f);
+static size_t currentRow = 0;
+static size_t currentColumn = 0;
+static int ungetted = EOF;
+
+int nextc(FILE *f) {
+	if(ungetted != EOF) {
+		int ret = ungetted;
+		ungetted = EOF;
+		return ret;
+	}
 	
+	int c = fgetc(f);
+	if(c == '\n') {
+		currentRow++;
+		currentColumn = 0;
+	} else if(c != EOF) {
+		currentColumn++;
+	}
+	return c;
+}
+
+int pushc(int c, FILE *f) {
+	ungetted = c;
+}
+
+Token nct_tokenize(FILE *f) {
 	Token tok;
 	tok.content = NULL;
+	tok.row = currentRow;
+	tok.column = currentColumn;
 	
-	if(c == -1) {
+	int c = nextc(f);
+	
+	if(c == EOF) {
 		tok.type = TOKEN_EOF;
 		return tok;
 	}
@@ -78,13 +105,13 @@ Token nct_tokenize(FILE *f) {
 		size_t i = 0;
 		content[i++] = c;
 		
-		while(c = fgetc(f), (isAlphanum(c) || c == '@')) {
+		while(c = nextc(f), (isAlphanum(c) || c == '@')) {
 			assert(i != 63 && "Identifiers have a maximum size of 63.");
 			
 			content[i++] = c;
 		}
 		
-		ungetc(c, f);
+		pushc(c, f);
 		
 		if(!strcmp(content, "local")) {
 			free(content);
@@ -117,7 +144,7 @@ Token nct_tokenize(FILE *f) {
 		size_t i = 0;
 		content[i++] = c;
 		
-		while(c = fgetc(f), isNum(c)) {
+		while(c = nextc(f), isNum(c)) {
 			assert(i != 63 && "Numbers have a maximum size of 63.");
 			
 			content[i++] = c;
@@ -128,30 +155,30 @@ Token nct_tokenize(FILE *f) {
 		if(c == 'r') {
 			content[i++] = c;
 			
-			while(c = fgetc(f), (isNum(c) || (base > 10 && c >= 'A' && c < ('A' + base - 10)))) {
+			while(c = nextc(f), (isNum(c) || (base > 10 && c >= 'A' && c < ('A' + base - 10)))) {
 				assert(i != 63 && "Numbers have a maximum size of 63.");
 
 				content[i++] = c;
 			}
 		}
 		
-		ungetc(c, f);
+		pushc(c, f);
 		
 		tok.type = TOKEN_NUMBER;
 		tok.content = content;
 		return tok;
 	} else if(isWS(c)) {
-		char c;
+		int c;
 
-		while(c = fgetc(f), isWS(c)) {
+		while(c = nextc(f), isWS(c)) {
 		}
 
-		ungetc(c, f);
+		pushc(c, f);
 		
 		return nct_tokenize(f);
 	}
 
-	stahp("Invalid character '%c'", c);
+	stahp(currentRow, currentColumn, "Invalid character '%c' (byte %i)", c, c);
 }
 
 Token *nct_lex(FILE *f) {
