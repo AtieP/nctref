@@ -304,6 +304,7 @@ AST *nct_parse_statement(Parser *P) {
 	if(maybe(P, TOKEN_IF)) {
 		ASTStatementIf *ret = malloc(sizeof(*ret));
 		ret->nodeKind = AST_STATEMENT_IF;
+		ret->next = NULL;
 		
 		expect(P, TOKEN_PAREN_L);
 		ret->expression = nct_parse_expression(P, 0);
@@ -313,12 +314,11 @@ AST *nct_parse_statement(Parser *P) {
 		ret->then = nct_parse_chunk(P, 0);
 		expect(P, TOKEN_SQUIGGLY_R);
 		
-		ret->next = NULL;
-		
 		return (AST*) ret;
 	} else if(maybe(P, TOKEN_LOOP)) {
 		ASTStatementLoop *ret = malloc(sizeof(*ret));
 		ret->nodeKind = AST_STATEMENT_LOOP;
+		ret->next = NULL;
 		
 		expect(P, TOKEN_SQUIGGLY_L);
 		ret->body = nct_parse_chunk(P, 0);
@@ -328,6 +328,7 @@ AST *nct_parse_statement(Parser *P) {
 	} else if(maybe(P, TOKEN_BREAK)) {
 		ASTStatementLoop *ret = malloc(sizeof(*ret));
 		ret->nodeKind = AST_STATEMENT_BREAK;
+		ret->next = NULL;
 		
 		expect(P, TOKEN_SEMICOLON);
 		
@@ -355,6 +356,9 @@ ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {
 }
 
 ASTChunk *nct_parse(Token *tokens) {
-	Parser P = {.tokens = tokens, .i = 0, .scope = NULL};
+	Parser P;
+	P.tokens = tokens;
+	P.i = 0;
+	P.scope = NULL;
 	return nct_parse_chunk(&P, 1);
 }

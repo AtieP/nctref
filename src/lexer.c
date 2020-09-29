@@ -28,34 +28,50 @@ static int isWS(char c) {
 Token nct_tokenize(FILE *f) {
 	int c = fgetc(f);
 	
+	Token tok;
+	tok.content = NULL;
+	
 	if(c == -1) {
-		return (Token) {.type = TOKEN_EOF, .content = NULL};
+		tok.type = TOKEN_EOF;
+		return tok;
 	}
 	
 	if(c == ';') {
-		return (Token) {.type = TOKEN_SEMICOLON, .content = NULL};
+		tok.type = TOKEN_SEMICOLON;
+		return tok;
 	} else if(c == ':') {
-		return (Token) {.type = TOKEN_COLON, .content = NULL};
+		tok.type = TOKEN_COLON;
+		return tok;
 	} else if(c == '(') {
-		return (Token) {.type = TOKEN_PAREN_L, .content = NULL};
+		tok.type = TOKEN_PAREN_L;
+		return tok;
 	} else if(c == ')') {
-		return (Token) {.type = TOKEN_PAREN_R, .content = NULL};
+		tok.type = TOKEN_PAREN_R;
+		return tok;
 	} else if(c == '{') {
-		return (Token) {.type = TOKEN_SQUIGGLY_L, .content = NULL};
+		tok.type = TOKEN_SQUIGGLY_L;
+		return tok;
 	} else if(c == '}') {
-		return (Token) {.type = TOKEN_SQUIGGLY_R, .content = NULL};
+		tok.type = TOKEN_SQUIGGLY_R;
+		return tok;
 	} else if(c == '+') {
-		return (Token) {.type = TOKEN_PLUS, .content = NULL};
+		tok.type = TOKEN_PLUS;
+		return tok;
 	} else if(c == '-') {
-		return (Token) {.type = TOKEN_MINUS, .content = NULL};
+		tok.type = TOKEN_MINUS;
+		return tok;
 	} else if(c == '*') {
-		return (Token) {.type = TOKEN_STAR, .content = NULL};
+		tok.type = TOKEN_STAR;
+		return tok;
 	} else if(c == '/') {
-		return (Token) {.type = TOKEN_SLASH, .content = NULL};
+		tok.type = TOKEN_SLASH;
+		return tok;
 	} else if(c == '=') {
-		return (Token) {.type = TOKEN_EQUALS, .content = NULL};
+		tok.type = TOKEN_EQUALS;
+		return tok;
 	} else if(c == ',') {
-		return (Token) {.type = TOKEN_COMMA, .content = NULL};
+		tok.type = TOKEN_COMMA;
+		return tok;
 	} else if(isAlpha(c) || c == '@') {
 		char *content = calloc(64, 1);
 		
@@ -72,22 +88,29 @@ Token nct_tokenize(FILE *f) {
 		
 		if(!strcmp(content, "local")) {
 			free(content);
-			return (Token) {.type = TOKEN_LOCAL, .content = NULL};
+			tok.type = TOKEN_LOCAL;
+			return tok;
 		} else if(!strcmp(content, "if")) {
 			free(content);
-			return (Token) {.type = TOKEN_IF, .content = NULL};
+			tok.type = TOKEN_IF;
+			return tok;
 		} else if(!strcmp(content, "extern")) {
 			free(content);
-			return (Token) {.type = TOKEN_EXTERN, .content = NULL};
+			tok.type = TOKEN_EXTERN;
+			return tok;
 		} else if(!strcmp(content, "loop")) {
 			free(content);
-			return (Token) {.type = TOKEN_LOOP, .content = NULL};
+			tok.type = TOKEN_LOOP;
+			return tok;
 		} else if(!strcmp(content, "break")) {
 			free(content);
-			return (Token) {.type = TOKEN_BREAK, .content = NULL};
+			tok.type = TOKEN_BREAK;
+			return tok;
 		}
 		
-		return (Token) {.type = TOKEN_IDENTIFIER, .content = content};
+		tok.type = TOKEN_IDENTIFIER;
+		tok.content = content;
+		return tok;
 	} else if(isNum(c)) {
 		char *content = calloc(64, 1);
 		
@@ -114,7 +137,9 @@ Token nct_tokenize(FILE *f) {
 		
 		ungetc(c, f);
 		
-		return (Token) {.type = TOKEN_NUMBER, .content = content};
+		tok.type = TOKEN_NUMBER;
+		tok.content = content;
+		return tok;
 	} else if(isWS(c)) {
 		char c;
 
@@ -127,7 +152,6 @@ Token nct_tokenize(FILE *f) {
 	}
 
 	stahp("Invalid character '%c'", c);
-	return (Token) {};
 }
 
 Token *nct_lex(FILE *f) {

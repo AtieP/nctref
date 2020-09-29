@@ -21,9 +21,6 @@ typedef struct VarTableEntry {
 			int isLocal;
 			int isExternal;
 		} symbol;
-		struct {
-			
-		};
 	} data;
 	
 	void *userdata;

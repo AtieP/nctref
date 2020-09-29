@@ -1,7 +1,7 @@
 #ifndef CG_X86_H
 #define CG_X86_H
 
-#include"sds.h"
+#include"dstr.h"
 #include"ast.h"
 #include"regalloc.h"
 
@@ -15,7 +15,7 @@ typedef enum {
 } X86Mode;
 
 typedef struct {
-	sds text;
+	dstr text;
 	size_t lidx; // ID of next .L label
 	size_t stackDepth;
 	
