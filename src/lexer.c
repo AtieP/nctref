@@ -111,7 +111,7 @@ Token nct_tokenize(FILE *f) {
 		tok.type = TOKEN_COMMA;
 		return tok;
 	} else if(isAlpha(c) || c == '@') {
-		char *content = calloc(64, 1);
+		char *content = calloc(32, 1);
 		
 		size_t i = 0;
 		content[i++] = c;
@@ -150,7 +150,7 @@ Token nct_tokenize(FILE *f) {
 		tok.content = content;
 		return tok;
 	} else if(isNum(c)) {
-		char *content = calloc(64, 1);
+		char *content = calloc(32, 1);
 		
 		size_t i = 0;
 		content[i++] = c;
