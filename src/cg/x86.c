@@ -498,8 +498,7 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 #endif
 			} else {
 				if(ast->statementDecl.expression->expression.constantType == EXPRESSION_NOT_CONSTANT) {
-					fputs("Symbol declaration may contain constant expressions only.\n", stderr);
-					abort();
+					stahp(1, 4142, "Symbol declaration may contain constant expressions only.");
 				}
 				
 				if(!ent->data.symbol.isLocal) {
