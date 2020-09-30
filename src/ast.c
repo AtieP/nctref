@@ -44,6 +44,8 @@ AST *ast_expression_optimize(AST *ast) {
 			}
 			
 			if(ast->expressionBinaryOp.amountOfOperands == 0) {
+				free(ast);
+				ast = malloc(sizeof(ASTExpressionPrimitive));
 				ast->nodeKind = AST_EXPRESSION_PRIMITIVE;
 				ast->expression.type = primitive_parse("u8");
 				ast->expression.constantType = EXPRESSION_CONSTANT_FALSY;
