@@ -1,0 +1,5 @@
+u8 a = 5;
+if(a) {
+	u8 a = 10; /* Should not cause scoping errors. */
+}
+u8 b = 15; /* `a` in the if statement scope should be free'd. */
