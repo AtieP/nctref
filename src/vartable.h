@@ -3,6 +3,8 @@
 
 #include"types.h"
 
+#define VARTABLE_BUCKETS 32
+
 typedef enum {
 	VARTABLEENTRY_SYMBOL, VARTABLEENTRY_TYPE, VARTABLEENTRY_VAR
 } VarTableEntryKind;
@@ -29,7 +31,7 @@ typedef struct VarTableEntry {
 typedef struct VarTable {
 	struct VarTable *parent;
 	
-	VarTableEntry *buckets[128];
+	VarTableEntry *buckets[VARTABLE_BUCKETS];
 } VarTable;
 
 VarTable *vartable_new(VarTable*);

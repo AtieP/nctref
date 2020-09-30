@@ -13,7 +13,7 @@ VarTable *vartable_new(VarTable *parent) {
 }
 
 VarTableEntry *vartable_get(VarTable *this, const char *name) {
-	size_t hash = djb2(name) % 128;
+	size_t hash = djb2(name) % VARTABLE_BUCKETS;
 	
 	VarTableEntry *entry = this->buckets[hash];
 	while(entry && strcmp(name, entry->name)) {
@@ -36,7 +36,7 @@ VarTableEntry *vartable_find(VarTable *this, const char *name) {
 }
 
 VarTableEntry *vartable_set(VarTable *this, VarTableEntry *e) {
-	size_t hash = djb2(e->name) % 128;
+	size_t hash = djb2(e->name) % VARTABLE_BUCKETS;
 	
 	e->next = this->buckets[hash];
 	this->buckets[hash] = e;
