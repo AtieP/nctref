@@ -130,13 +130,13 @@ static char *yasm_directname(int bytes) {
 	switch(bytes) {
 #ifdef SYNTAX_GAS
 	case 1:
-		return "byte";
+		return ".byte";
 	case 2:
-		return "word";
+		return ".word";
 	case 4:
-		return "long";
+		return ".long";
 	case 8:
-		return "quad";
+		return ".quad";
 #else
 	case 1:
 		return "db";
@@ -510,11 +510,7 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 				
 				if(ast->statementDecl.expression) {
 					AST *expr = ast->statementDecl.expression;
-#ifdef SYNTAX_GAS
-					X->text = dstrfmt(X->text, "%s: .%s %i\n", ent->data.symbol.linkName, yasm_directname(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
-#else
 					X->text = dstrfmt(X->text, "%s: %s %i\n", ent->data.symbol.linkName, yasm_directname(typeSize), expr->expressionPrimitive.numerator / expr->expressionPrimitive.denominator);
-#endif
 				} else {
 #ifdef SYNTAX_GAS
 					X->text = dstrfmt(X->text, "%s: .skip %i\n", ent->data.symbol.linkName, typeSize);
