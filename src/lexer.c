@@ -117,7 +117,9 @@ Token nct_tokenize(FILE *f) {
 		content[i++] = c;
 		
 		while(c = nextc(f), (isAlphanum(c) || c == '@')) {
-			assert(i != 63 && "Identifiers have a maximum size of 63.");
+			if(i == 31) {
+				stahp(1, 6180, "Identifiers have a maximum size of 31.");
+			}
 			
 			content[i++] = c;
 		}
@@ -156,7 +158,9 @@ Token nct_tokenize(FILE *f) {
 		content[i++] = c;
 		
 		while(c = nextc(f), isNum(c)) {
-			assert(i != 63 && "Numbers have a maximum size of 63.");
+			if(i == 31) {
+				stahp(1, 6180, "Numbers have a maximum size of 31.");
+			}
 			
 			content[i++] = c;
 		}
@@ -167,8 +171,10 @@ Token nct_tokenize(FILE *f) {
 			content[i++] = c;
 			
 			while(c = nextc(f), (isNum(c) || (base > 10 && c >= 'A' && c < ('A' + base - 10)))) {
-				assert(i != 63 && "Numbers have a maximum size of 63.");
-
+				if(i == 31) {
+					stahp(1, 6180, "Numbers have a maximum size of 31.");
+				}
+				
 				content[i++] = c;
 			}
 		}
