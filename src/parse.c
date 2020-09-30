@@ -344,6 +344,7 @@ ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {
 	ASTChunk *ret = malloc(sizeof(*ret));
 	ret->nodeKind = AST_CHUNK;
 	ret->statements = NULL;
+	ret->scope = P->scope;
 	
 	AST **ptr = &ret->statements;
 	

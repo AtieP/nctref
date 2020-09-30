@@ -581,6 +581,16 @@ void x86_visit_chunk(X86 *X, ASTChunk *chunk) {
 	while(stmt) {
 		stmt = x86_visit_statement(X, stmt);
 	}
+	
+	for(int i = 0; i < VARTABLE_BUCKETS; i++) {
+		VarTableEntry *ent = chunk->scope->buckets[i];
+		while(ent) {
+			if(ent->userdata) {
+				x86_free(X, ent->userdata);
+			}
+			ent = ent->next;
+		}
+	}
 }
 
 void x86_finish(X86 *X) {

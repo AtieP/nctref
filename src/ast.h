@@ -104,6 +104,8 @@ typedef struct {
 	ASTKind nodeKind;
 	
 	union AST *statements;
+	
+	VarTable *scope;
 } ASTChunk;
 
 typedef struct {
