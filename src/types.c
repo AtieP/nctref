@@ -93,6 +93,8 @@ size_t type_size(Type *t) {
 		return w;
 	} else if(t->type == TYPE_TYPE_POINTER) {
 		return 4;
+	} else if(t->type == TYPE_TYPE_FUNCTION) {
+		return 1; /* TODO: improve. */
 	}
 	
 	abort();
