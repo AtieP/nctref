@@ -91,8 +91,19 @@ Token nct_tokenize(FILE *f) {
 		tok.type = TOKEN_STAR;
 		return tok;
 	} else if(c == '/') {
-		tok.type = TOKEN_SLASH;
-		return tok;
+		int c = nextc(f);
+		if(c == '*') { /* This is a comment; skip. */
+			while(1) {
+				while((c = nextc(f)) != '*');
+				if(nextc(f) == '/') {
+					return nct_tokenize(f);
+				}
+			}
+		} else {
+			ungetc(c, f);
+			tok.type = TOKEN_SLASH;
+			return tok;
+		}
 	} else if(c == '=') {
 		tok.type = TOKEN_EQUALS;
 		return tok;
