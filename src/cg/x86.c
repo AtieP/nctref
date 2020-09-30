@@ -180,6 +180,7 @@ static char *yasm_sizespecifier(int bytes) {
 	return NULL;
 }
 
+static void gmov(X86*, X86AllocationInfo*, X86AllocationInfo*);
 /* Use when a register is necessary, else use x86_allocate, which may use the stack instead. */
 static X86AllocationInfo *x86_allocreg(X86 *X, int specificReg, size_t sz) {
 	X86AllocationInfo *n = malloc(sizeof(*n));
@@ -187,20 +188,13 @@ static X86AllocationInfo *x86_allocreg(X86 *X, int specificReg, size_t sz) {
 	n->size = sz;
 	n->refcount = 1;
 	
-	n->regId = ralloc_alloc(X->rallocator, n, sz);
-	if(n->regId != -1) {
-		return n;
+	if(specificReg == -1) {
+		n->regId = ralloc_alloc(X->rallocator, n, sz);
+		if(n->regId != -1) {
+			return n;
+		}
 	}
 	
-	n->regId = specificReg != -1 ? specificReg : cast_register(ralloc_findname(X->rallocator, "edi"), sz);
-	
-	X86AllocationInfo *o = X->rallocator->registers[n->regId].userdata;
-	o->strategy = X86_ALLOC_STACK;
-	o->stackDepth = X->stackDepth -= ((o->size + 3) % 4);
-	
-	X->rallocator->registers[n->regId].userdata = n;
-	
-	n->regId = ralloc_alloc(X->rallocator, n, sz);
 	return n;
 }
 
@@ -252,7 +246,7 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 #ifdef SYNTAX_GAS
 		return dstrfmt(dstrempty(), "$%s", info->memName);
 #else
-		return dstrfmt(dstrempty(), "%s", yasm_sizespecifier(coerceToSize), info->memName);
+		return dstrfmt(dstrempty(), "%s", info->memName);
 #endif
 	}
 	return NULL;
@@ -402,7 +396,7 @@ static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 
 static void gcall(X86 *X, X86AllocationInfo *what) {
 	dstr w = gdescribeinfo(X, what, -1);
-	X->text = dstrfmt(X->text, "call %%S\n", w);
+	X->text = dstrfmt(X->text, "call %S\n", w);
 	dstrfree(w);
 }
 
@@ -497,7 +491,7 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		gpushr(X, "edx");
 		
 		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
-		X86AllocationInfo *r = x86_allocreg(X, -1, type_size(ast->expressionCall.what->expression.type->function.ret));
+		X86AllocationInfo *r = x86_allocreg(X, ralloc_findname(X->rallocator, "eax"), -1);
 		gcall(X, i);
 		x86_free(X, i);
 		

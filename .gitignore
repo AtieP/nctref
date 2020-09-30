@@ -6,3 +6,4 @@ ntc.exe
 *.o
 *.err
 dos4gw.exe
+massif.out.*
