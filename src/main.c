@@ -8,7 +8,7 @@
 #include<string.h>
 
 int main(int argc, char **argv) {
-	if(argc == 1) stahp(3, 1415, "No file specified. Refer to the man page for instructions.");
+	if(argc == 1) stahp(3, 1415, "No file specified.");
 	
 	FILE *f = !strcmp(argv[1], "-") ? stdin : fopen(argv[1], "rb");
 	
