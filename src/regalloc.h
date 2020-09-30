@@ -13,7 +13,7 @@ typedef struct {
 	char name[8];
 	RegisterState state;
 	uint8_t size;
-	uint64_t aliasBitmap;
+	uint32_t aliasBitmap;
 	
 	void *userdata;
 } Register;

@@ -2,7 +2,7 @@
 
 #include<stdlib.h>
 #include<string.h>
-
+#include"reporting.h"
 
 #ifndef __GNUC__
 int __builtin_ctz(uint8_t i) {
@@ -273,9 +273,15 @@ static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	dstr s = gdescribeinfo(X, src, -1), d = gdescribeinfo(X, dst, -1);
+	dstr d = gdescribeinfo(X, dst, -1);
+	dstr s;
 	
-	int zx = dst->size > src->size;
+	int zx = dst->size >= src->size;
+	if(zx) {
+		s = gdescribeinfo(X, src, -1);
+	} else if(dst->size < src->size) {
+		s = gdescribeinfo(X, src, dst->size);
+	}
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
@@ -400,6 +406,12 @@ static void gcall(X86 *X, X86AllocationInfo *what) {
 	dstrfree(w);
 }
 
+static void gneg(X86 *X, X86AllocationInfo *info) {
+	dstr i = gdescribeinfo(X, info, -1);
+	X->text = dstrfmt(X->text, "neg %S\n", i);
+	dstrfree(i);
+}
+
 void x86_new(X86 *X) {
 	X->text = dstrempty();
 	X->lidx = 0;
@@ -462,13 +474,24 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_UNARY_OP) {
-		if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
-		
-		X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
-		gderef(X, dst, a);
-		x86_free(X, a);
-		
-		return dst;
+		if(ast->expressionUnaryOp.operator == UNOP_DEREF) {
+			if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
+			
+			X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
+			gderef(X, dst, a);
+			x86_free(X, a);
+			
+			return dst;
+		} else {
+			if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type));
+			
+			X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
+			gmov(X, dst, a);
+			gneg(X, dst);
+			x86_free(X, a);
+			
+			return dst;
+		}
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
 		gpushr(X, "ecx");
 		gpushr(X, "edx");

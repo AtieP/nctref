@@ -3,7 +3,7 @@ loop {
 	u16* y = 257;
 	u9 w = -4;
 	u4 z = *y - *y;
-	u2 o = 0;
+	u2 o = -w;
 	
 	if(x) {
 		break;
