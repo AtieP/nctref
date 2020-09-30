@@ -9,9 +9,9 @@ PREFIX = /usr/local
 
 ntc: $(SOURCES) $(HEADERS)
 ifdef OW
-	wcl $(if $(GAS),-DSYNTAX_GAS=1,) -fe="ntc.exe" -0 -bcl=dos -mt -d0 -os -om -ob -oi -ol -ox -lr -za99 -i=src $(SOURCES)
+	wcl $(if $(GAS),-DSYNTAX_GAS=1,) -fe="ntc.exe" -0 -bcl=dos -mt $(if $(DEBUG),,-d0 -os -om -ob -oi -ol -ox) -lr -za99 -i=src $(SOURCES)
 else
-	cc $(if $(GAS),-DSYNTAX_GAS,) -Wall -o ntc -std=gnu99 -Os -g -fms-extensions -Isrc $(SOURCES)
+	cc $(if $(GAS),-DSYNTAX_GAS,) -Wall -o ntc -std=gnu99 $(if $(DEBUG),-O0 -g,-Os -s) -fms-extensions -Isrc $(SOURCES)
 endif
 
 install: ntc
