@@ -181,23 +181,24 @@ static char *yasm_sizespecifier(int bytes) {
 }
 
 /* Use when a register is necessary, else use x86_allocate, which may use the stack instead. */
-static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
+static X86AllocationInfo *x86_allocreg(X86 *X, int specificReg, size_t sz) {
 	X86AllocationInfo *n = malloc(sizeof(*n));
 	n->strategy = X86_ALLOC_REG;
 	n->size = sz;
 	n->refcount = 1;
 	
-	int ret = ralloc_alloc(X->rallocator, n, sz);
-	if(ret != -1) {
-		n->regId = ret;
+	n->regId = ralloc_alloc(X->rallocator, n, sz);
+	if(n->regId != -1) {
 		return n;
 	}
 	
-	ret = cast_register(ralloc_findname(X->rallocator, "edi"), sz); /* There's no particular reason to use edi here. */
+	n->regId = specificReg != -1 ? specificReg : cast_register(ralloc_findname(X->rallocator, "edi"), sz);
 	
-	X86AllocationInfo *o = X->rallocator->registers[ret].userdata;
+	X86AllocationInfo *o = X->rallocator->registers[n->regId].userdata;
 	o->strategy = X86_ALLOC_STACK;
 	o->stackDepth = X->stackDepth -= ((o->size + 3) % 4);
+	
+	X->rallocator->registers[n->regId].userdata = n;
 	
 	n->regId = ralloc_alloc(X->rallocator, n, sz);
 	return n;
@@ -249,9 +250,9 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 #endif
 	case X86_ALLOC_MEM:
 #ifdef SYNTAX_GAS
-		return dstrfmt(dstrempty(), "%s", info->memName);
+		return dstrfmt(dstrempty(), "$%s", info->memName);
 #else
-		return dstrfmt(dstrempty(), "%s[%s]", yasm_sizespecifier(coerceToSize), info->memName);
+		return dstrfmt(dstrempty(), "%s", yasm_sizespecifier(coerceToSize), info->memName);
 #endif
 	}
 	return NULL;
@@ -283,7 +284,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 		X->text = dstrfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, -1, dst->size);
 		
 		gmov(X, tmp, src);
 		gmov(X, dst, tmp);
@@ -315,7 +316,7 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, -1, dst->size);
 		
 		gmov(X, tmp, src);
 		gaddsub(X, dst, tmp, isSub);
@@ -393,6 +394,12 @@ static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 	dstrfree(s);
 }
 
+static void gcall(X86 *X, X86AllocationInfo *what) {
+	dstr w = gdescribeinfo(X, what, -1);
+	X->text = dstrfmt(X->text, "call %%S\n", w);
+	dstrfree(w);
+}
+
 void x86_new(X86 *X) {
 	X->text = dstrempty();
 	X->lidx = 0;
@@ -463,7 +470,18 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
-		/* TODO: add. */
+		gpushr(X, "ecx");
+		gpushr(X, "edx");
+		
+		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
+		X86AllocationInfo *r = x86_allocreg(X, -1, type_size(ast->expressionCall.what->expression.type->function.ret));
+		gcall(X, i);
+		x86_free(X, i);
+		
+		gpopr(X, "edx");
+		gpopr(X, "ecx");
+		
+		return r;
 	}
 
 	abort();
