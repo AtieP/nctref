@@ -186,15 +186,15 @@ Token nct_tokenize(FILE *f) {
 		return tok;
 	} else if(isWS(c)) {
 		int c;
-
+		
 		while(c = nextc(f), isWS(c)) {
 		}
-
+		
 		pushc(c, f);
 		
 		return nct_tokenize(f);
 	}
-
+	
 	stahp(currentRow, currentColumn, "Invalid character '%c' (byte %i)", c, c);
 }
 
