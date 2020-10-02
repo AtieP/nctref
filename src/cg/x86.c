@@ -180,20 +180,64 @@ static char *yasm_sizespecifier(int bytes) {
 	return NULL;
 }
 
-static void gmov(X86*, X86AllocationInfo*, X86AllocationInfo*);
+static void gpushr(X86 *X, const char *reg) {
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "push %%%s\n", reg);
+#else
+	X->text = dstrfmt(X->text, "push %s\n", reg);
+#endif
+}
+
+static void gpopr(X86 *X, const char *reg) {
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "pop %%%s\n", reg);
+#else
+	X->text = dstrfmt(X->text, "pop %s\n", reg);
+#endif
+}
+
+static void gglobal(X86 *X, const char *sym) {
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, ".global %s\n", sym);
+#else
+	X->text = dstrfmt(X->text, "global %s\n", sym);
+#endif
+}
+
+static void x86_spill(X86 *X, int reg) {
+	gpushr(X, X->rallocator->registers[cast_register(reg, 4)].name);
+	
+	X86AllocationInfo *info = X->rallocator->registers[reg].userdata;
+	info->strategy = X86_ALLOC_STACK;
+	info->stackDepth = X->stackDepth -= ((info->size + 3) % 4);
+}
+
 /* Use when a register is necessary, else use x86_allocate, which may use the stack instead. */
-static X86AllocationInfo *x86_allocreg(X86 *X, int specificReg, size_t sz) {
+static X86AllocationInfo *x86_makeregavailable(X86 *X, int id) {
+	X86AllocationInfo *n = malloc(sizeof(*n));
+	n->strategy = X86_ALLOC_REG;
+	n->size = register_size(id);
+	n->refcount = 1;
+	n->regId = id;
+	
+	if(X->rallocator->registers[id].state != REGISTER_FREE) {
+		x86_spill(X, id);
+		ralloc_setuserdata(X->rallocator, id, n);
+	}
+	
+	return n;
+}
+
+static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
+	int id = ralloc_alloc(X->rallocator, sz);
+	if(id == -1) return x86_makeregavailable(X, cast_register(ralloc_findname(X->rallocator, "edi"), sz));
+	
 	X86AllocationInfo *n = malloc(sizeof(*n));
 	n->strategy = X86_ALLOC_REG;
 	n->size = sz;
 	n->refcount = 1;
-	
-	if(specificReg == -1) {
-		n->regId = ralloc_alloc(X->rallocator, n, sz);
-		if(n->regId != -1) {
-			return n;
-		}
-	}
+	n->regId = id;
+	ralloc_setuserdata(X->rallocator, id, n);
 	
 	return n;
 }
@@ -203,7 +247,9 @@ static X86AllocationInfo *x86_allocate(X86 *X, size_t sz) {
 	ret->size = sz;
 	ret->refcount = 1;
 	
-	int reg = ralloc_alloc(X->rallocator, ret, sz);
+	int reg = ralloc_alloc(X->rallocator, sz);
+	ralloc_setuserdata(X->rallocator, reg, ret);
+	
 	if(reg != -1) {
 		ret->strategy = X86_ALLOC_REG;
 		ret->regId = reg;
@@ -267,15 +313,19 @@ static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	dstr d = gdescribeinfo(X, dst, -1);
-	dstr s;
+	int dstSize = dst->size, srcSize = dst->size;
 	
-	int zx = dst->size >= src->size;
-	if(zx) {
-		s = gdescribeinfo(X, src, -1);
-	} else if(dst->size < src->size) {
-		s = gdescribeinfo(X, src, dst->size);
+	/* Don't accidentally use sil or dil if not supported. */
+	if(src->strategy == X86_ALLOC_REG) {
+		while(X->rallocator->registers[cast_register(src->regId, srcSize)].state == REGISTER_DOESNT_EXIST) {
+			srcSize *= 2;
+		}
+		dstSize = dstSize < srcSize ? srcSize : dstSize;
 	}
+	
+	dstr s = gdescribeinfo(X, src, srcSize), d = gdescribeinfo(X, dst, dstSize);
+	
+	int zx = dstSize > srcSize;
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
@@ -284,7 +334,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 		X->text = dstrfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, -1, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
 		
 		gmov(X, tmp, src);
 		gmov(X, dst, tmp);
@@ -316,7 +366,7 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, -1, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
 		
 		gmov(X, tmp, src);
 		gaddsub(X, dst, tmp, isSub);
@@ -339,46 +389,6 @@ static void gcmp0(X86 *X, X86AllocationInfo *info) {
 #endif
 	}
 	dstrfree(i);
-}
-
-static void gcallr(X86 *X, const char *reg) {
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "call %%%s\n", reg);
-#else
-	X->text = dstrfmt(X->text, "call %s\n", reg);
-#endif
-}
-
-static void gcallsym(X86 *X, const char *sym) {
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "call $%s\n", sym);
-#else
-	X->text = dstrfmt(X->text, "call %s\n", sym);
-#endif
-}
-
-static void gpushr(X86 *X, const char *reg) {
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "push %%%s\n", reg);
-#else
-	X->text = dstrfmt(X->text, "push %s\n", reg);
-#endif
-}
-
-static void gpopr(X86 *X, const char *reg) {
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "pop %%%s\n", reg);
-#else
-	X->text = dstrfmt(X->text, "pop %s\n", reg);
-#endif
-}
-
-static void gglobal(X86 *X, const char *sym) {
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, ".global %s\n", sym);
-#else
-	X->text = dstrfmt(X->text, "global %s\n", sym);
-#endif
 }
 
 static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
@@ -487,11 +497,12 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			return dst;
 		}
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
+		X86AllocationInfo *r = x86_makeregavailable(X, ralloc_findname(X->rallocator, "eax"));
+		
 		gpushr(X, "ecx");
 		gpushr(X, "edx");
 		
 		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
-		X86AllocationInfo *r = x86_allocreg(X, ralloc_findname(X->rallocator, "eax"), -1);
 		gcall(X, i);
 		x86_free(X, i);
 		

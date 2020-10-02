@@ -6,22 +6,17 @@
 
 int BINOP_COMMUTATIVE[] = {[BINOP_ADD] = 1, [BINOP_SUB] = 0, [BINOP_MUL] = 1, [BINOP_DIV] = 0};
 
-static int cmp_op_level(BinaryOp one, BinaryOp two) {
-	if(one == BINOP_ADD || one == BINOP_SUB) {
-		return two == BINOP_ADD || two == BINOP_SUB;
-	} else if(one == BINOP_MUL || one == BINOP_DIV) {
-		return two == BINOP_MUL || two == BINOP_DIV;
-	}
-	return 0;
-}
-
 void ast_expression_binop_removeoperand(AST *ast, size_t i) {
-	free(ast->expressionBinaryOp.operands[i]);
+	free(ast->expressionBinaryOp.operands[i]); /* TODO: free the children! */
 	
-	memmove(&ast->expressionBinaryOp.operands[i], &ast->expressionBinaryOp.operands[i + 1], sizeof(AST*) * (ast->expressionBinaryOp.amountOfOperands - i));
+	if(i != ast->expressionBinaryOp.amountOfOperands - 1) {
+		memmove(&ast->expressionBinaryOp.operands[i], &ast->expressionBinaryOp.operands[i + 1], sizeof(AST*) * (ast->expressionBinaryOp.amountOfOperands - i - 1));
+	}
+	
 	if(i != 0) {
 		memmove(&ast->expressionBinaryOp.operators[i - 1], &ast->expressionBinaryOp.operators[i], sizeof(BinaryOp) * (ast->expressionBinaryOp.amountOfOperands - i));
 	}
+	
 	ast->expressionBinaryOp.amountOfOperands--;
 }
 
@@ -47,7 +42,7 @@ AST *ast_expression_optimize(AST *ast) {
 				free(ast);
 				ast = malloc(sizeof(ASTExpressionPrimitive));
 				ast->nodeKind = AST_EXPRESSION_PRIMITIVE;
-				ast->expression.type = primitive_parse("u8");
+				ast->expression.type = (Type*) primitive_parse("u8");
 				ast->expression.constantType = EXPRESSION_CONSTANT_FALSY;
 				ast->expressionPrimitive.numerator = 0;
 				ast->expressionPrimitive.denominator = 1;
