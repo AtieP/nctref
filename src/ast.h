@@ -21,12 +21,20 @@ typedef enum {
 } ASTKind;
 
 typedef enum {
-	BINOP_ADD = 0, BINOP_SUB = 1, BINOP_MUL = 2, BINOP_DIV = 3
+	BINOP_ADD = 0,
+	BINOP_SUB = 1,
+	BINOP_MUL = 2,
+	BINOP_DIV = 3,
+	BINOP_BITWISE_AND = 4,
+	BINOP_BITWISE_OR = 5,
+	BINOP_BITWISE_XOR = 6
 } BinaryOp;
 extern int BINOP_COMMUTATIVE[];
 
 typedef enum {
-	UNOP_DEREF = 0, UNOP_NEGATE = 1
+	UNOP_DEREF = 0,
+	UNOP_NEGATE = 1,
+	UNOP_BITWISE_NOT = 2
 } UnaryOp;
 
 typedef enum {

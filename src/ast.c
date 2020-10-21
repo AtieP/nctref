@@ -86,6 +86,15 @@ AST *ast_expression_optimize(AST *ast) {
 					case BINOP_DIV:
 						*constont /= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
 						break;
+					case BINOP_BITWISE_AND:
+					    *constont &= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					case BINOP_BITWISE_OR:
+					    *constont |= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
+					case BINOP_BITWISE_XOR:
+					    *constont ^= ast->expressionBinaryOp.operands[i]->expressionPrimitive.numerator;
+						break;
 					}
 					
 					ast_expression_binop_removeoperand(ast, i);

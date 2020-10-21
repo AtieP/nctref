@@ -108,6 +108,23 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 
 				return (AST*) astop;
 			}
+		} else if(maybe(P, TOKEN_TILDE)) {
+			AST *child = nct_parse_expression(P, lOP);
+
+			if(child->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+				child->expressionPrimitive.numerator = \
+				    ~child->expressionPrimitive.numerator;
+				return child;
+			} else {
+				ASTExpressionUnaryOp *astop = malloc(sizeof(*astop));
+				astop->nodeKind = AST_EXPRESSION_UNARY_OP;
+				astop->constantType = EXPRESSION_NOT_CONSTANT;
+				astop->operator = UNOP_BITWISE_NOT;
+				astop->chaiuld = child;
+				astop->type = child->expression.type;
+
+				return (AST *) astop;
+			}
 		} else return nct_parse_expression(P, lOP + 1);
 	} else if(lOP == 2) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
@@ -168,7 +185,13 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 	} else if(lOP == 0) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 		
-		if(peek(P, 0).type == TOKEN_PLUS || peek(P, 0).type == TOKEN_MINUS) {
+		if(
+			peek(P, 0).type == TOKEN_PLUS
+			|| peek(P, 0).type == TOKEN_MINUS
+			|| peek(P, 0).type == TOKEN_AMPERSAND
+			|| peek(P, 0).type == TOKEN_VERTICAL_BAR
+			|| peek(P, 0).type == TOKEN_CARET
+		) {
 			ASTExpressionBinaryOp *astop = malloc(sizeof(*astop));
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
 			astop->constantType = EXPRESSION_NOT_CONSTANT;
@@ -184,6 +207,9 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 				BinaryOp op;
 				if(maybe(P, TOKEN_PLUS)) op = BINOP_ADD;
 				else if(maybe(P, TOKEN_MINUS)) op = BINOP_SUB;
+				else if(maybe(P, TOKEN_AMPERSAND)) op = BINOP_BITWISE_AND;
+				else if(maybe(P, TOKEN_VERTICAL_BAR)) op = BINOP_BITWISE_OR;
+				else if(maybe(P, TOKEN_CARET)) op = BINOP_BITWISE_XOR;
 				else break;
 				
 				if(astop->amountOfOperands == capacity) {

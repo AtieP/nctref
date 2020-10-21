@@ -26,7 +26,11 @@ char *TOKEN_NAMES[] = {
 	"'extern'",
 	"'loop'",
 	"'break'",
-	"','"
+	"','",
+	"'&'",
+	"'|'",
+	"'^'",
+	"'~'"
 };
 
 static int isAlpha(int c) {
@@ -109,6 +113,18 @@ Token nct_tokenize(FILE *f) {
 		return tok;
 	} else if(c == '*') {
 		tok.type = TOKEN_STAR;
+		return tok;
+	} else if(c == '&') {
+		tok.type = TOKEN_AMPERSAND;
+		return tok;
+	} else if(c == '|') {
+		tok.type = TOKEN_VERTICAL_BAR;
+		return tok;
+	} else if(c == '^') {
+		tok.type = TOKEN_CARET;
+		return tok;
+	} else if(c == '~') {
+		tok.type = TOKEN_TILDE;
 		return tok;
 	} else if(c == '/') {
 		int c = nextc(f);
