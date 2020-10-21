@@ -5,8 +5,28 @@
 #include<string.h>
 #include"reporting.h"
 
+// Comply to same order as in the TokenKind enum from src/lexer.h
 char *TOKEN_NAMES[] = {
-	"identifier", "'local'", "EOF", "number", "';'", "':'", "'if'", "'('", "')'", "'{'", "'}'", "'='", "'+'", "'-'", "'*'", "'/'", "'extern'", "'loop'", "'break'", "','"
+	"identifier",
+	"'local'",
+	"EOF",
+	"number",
+	"';'",
+	"':'",
+	"'if'",
+	"'('",
+	"')'",
+	"'{'",
+	"'}'",
+	"'='",
+	"'+'",
+	"'-'",
+	"'*'",
+	"'/'",
+	"'extern'",
+	"'loop'",
+	"'break'",
+	"','"
 };
 
 static int isAlpha(int c) {

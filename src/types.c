@@ -107,7 +107,13 @@ int type_equal(Type *O, Type *T) {
 	
 	if(O->type == TYPE_TYPE_PRIMITIVE) {
 		TypePrimitive *o = &O->primitive, *t = &T->primitive;
-		return o->width == t->width && o->base == t->base && o->isFloat == t->isFloat && o->isUnsigned == t->isUnsigned && o->isNative == t->isNative && o->isMinimum == t->isMinimum && o->vector == t->vector;
+		return o->width == t->width \
+		    && o->base == t->base \
+			&& o->isFloat == t->isFloat \
+			&& o->isUnsigned == t->isUnsigned \
+			&& o->isNative == t->isNative \
+			&& o->isMinimum == t->isMinimum \
+			&& o->vector == t->vector;
 	} else if(O->type == TYPE_TYPE_POINTER) {
 		return type_equal(O->pointer.of, T->pointer.of);
 	}
