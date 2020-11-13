@@ -13,7 +13,17 @@ Made to compile fast and produce not great, but acceptable output. Currently onl
 
 # Command-line usage
 
-    ntc input.nct
+    ntc arg1=val1 arg2=val2 ... argn=valn
+
+# Valid arguments
+
+This will be ported into a man page later:
+
+    x86_target: Target processor feature set (0 for 8086, 3 for 80386, m for generic x86_64)
+    x86_mode: Target operating mode (16 for 16-bit real mode, 32 for 32-bit protected mode or long mode, 64 for 64-bit long mode)
+    in: Input Nectar source file
+
+Unknown arguments are ignored.
 
 # License
 
