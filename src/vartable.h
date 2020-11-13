@@ -25,6 +25,8 @@ typedef struct VarTableEntry {
 		} symbol;
 	} data;
 	
+	int isDereferenced; /* Used by optimizations to determine whether to put in dereferencable register */
+	
 	void *userdata;
 } VarTableEntry;
 

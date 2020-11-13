@@ -2,4 +2,4 @@ extern u32() getc;
 
 u16 b = -2;
 u32 a = getc();
-u32 c = 9;
+u32 c = 9 + a;

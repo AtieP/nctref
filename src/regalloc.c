@@ -3,10 +3,10 @@
 #include<stdlib.h>
 #include<string.h>
 
-int ralloc_alloc(RegisterAllocator *this, uint8_t size) {
+int ralloc_alloc(RegisterAllocator *this, uint8_t size, int dereferencable) {
 	uint8_t i;
-	for(i = this->registersCount - 1; i >= 0; i--) {
-		if(this->registers[i].state == REGISTER_FREE && size == this->registers[i].size) {
+	for(i = 0; i < this->registersCount; i++) {
+		if(this->registers[i].state == REGISTER_FREE && size == this->registers[i].size && (this->registers[i].dereferencable >= dereferencable)) {
 			goto found;
 		}
 	}

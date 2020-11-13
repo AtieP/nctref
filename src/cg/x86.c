@@ -3,6 +3,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include"reporting.h"
+#include"ntc.h"
 
 #ifndef __GNUC__
 int __builtin_ctz(uint8_t i) {
@@ -28,100 +29,156 @@ static int cast_register(int i, uint8_t size) {
 
 static RegisterAllocator *create_ralloc(X86 *X) {
 	RegisterState sildil = X->mode == X86_MODE_64 ? REGISTER_FREE : REGISTER_DOESNT_EXIST; /* Is sil & dil also available in 32-bit long mode? */
+	RegisterState r32 = X->target == X86_TARGET_8086 ? REGISTER_DOESNT_EXIST : REGISTER_FREE;
+	RegisterState r64 = X->mode == X86_MODE_64 ? REGISTER_FREE : REGISTER_DOESNT_EXIST;
 	
-	RegisterAllocator *a = malloc(sizeof(RegisterAllocator) + sizeof(Register) * 18);
-	a->registersCount = 18;
-	memset(a->registers, 0, sizeof(Register) * 18);
+	RegisterAllocator *a = malloc(sizeof(RegisterAllocator) + sizeof(Register) * 24);
+	a->registersCount = 24;
+	memset(a->registers, 0, sizeof(Register) * 24);
 	
 	strncpy(a->registers[0].name, "al", 7);
 	a->registers[0].state = REGISTER_FREE;
 	a->registers[0].size = 1;
-	a->registers[0].aliasBitmap = 4161;
+	a->registers[0].aliasBitmap = 266305;
+	a->registers[0].dereferencable = 0;
 	
 	strncpy(a->registers[1].name, "bl", 7);
 	a->registers[1].state = REGISTER_FREE;
 	a->registers[1].size = 1;
-	a->registers[1].aliasBitmap = 8322;
+	a->registers[1].aliasBitmap = 532610;
+	a->registers[1].dereferencable = 0;
 	
 	strncpy(a->registers[2].name, "cl", 7);
 	a->registers[2].state = REGISTER_FREE;
 	a->registers[2].size = 1;
-	a->registers[2].aliasBitmap = 16644;
+	a->registers[2].aliasBitmap = 1065220;
+	a->registers[2].dereferencable = 0;
 	
 	strncpy(a->registers[3].name, "dl", 7);
 	a->registers[3].state = REGISTER_FREE;
 	a->registers[3].size = 1;
-	a->registers[3].aliasBitmap = 33288;
+	a->registers[3].aliasBitmap = 2130440;
+	a->registers[3].dereferencable = 0;
 	
 	strncpy(a->registers[4].name, "sil", 7);
 	a->registers[4].state = sildil;
 	a->registers[4].size = 1;
-	a->registers[4].aliasBitmap = 66576;
+	a->registers[4].aliasBitmap = 4260880;
+	a->registers[4].dereferencable = 0;
 	
 	strncpy(a->registers[5].name, "dil", 7);
 	a->registers[5].state = sildil;
 	a->registers[5].size = 1;
-	a->registers[5].aliasBitmap = 133152;
+	a->registers[5].aliasBitmap = 8521760;
+	a->registers[5].dereferencable = 0;
 	
 	strncpy(a->registers[6].name, "ax", 7);
 	a->registers[6].state = REGISTER_FREE;
 	a->registers[6].size = 2;
-	a->registers[6].aliasBitmap = 4161;
+	a->registers[6].aliasBitmap = 266305;
+	a->registers[6].dereferencable = 0;
 	
 	strncpy(a->registers[7].name, "bx", 7);
 	a->registers[7].state = REGISTER_FREE;
 	a->registers[7].size = 2;
-	a->registers[7].aliasBitmap = 8322;
+	a->registers[7].aliasBitmap = 532610;
+	a->registers[7].dereferencable = 1;
 	
 	strncpy(a->registers[8].name, "cx", 7);
 	a->registers[8].state = REGISTER_FREE;
 	a->registers[8].size = 2;
-	a->registers[8].aliasBitmap = 16644;
+	a->registers[8].aliasBitmap = 1065220;
+	a->registers[8].dereferencable = 0;
 	
 	strncpy(a->registers[9].name, "dx", 7);
 	a->registers[9].state = REGISTER_FREE;
 	a->registers[9].size = 2;
-	a->registers[9].aliasBitmap = 33288;
+	a->registers[9].aliasBitmap = 2130440;
+	a->registers[9].dereferencable = 0;
 	
 	strncpy(a->registers[10].name, "si", 7);
 	a->registers[10].state = REGISTER_FREE;
 	a->registers[10].size = 2;
-	a->registers[10].aliasBitmap = 66576;
+	a->registers[10].aliasBitmap = 4260880;
+	a->registers[10].dereferencable = 1;
 	
 	strncpy(a->registers[11].name, "di", 7);
 	a->registers[11].state = REGISTER_FREE;
 	a->registers[11].size = 2;
-	a->registers[11].aliasBitmap = 133152;
+	a->registers[11].aliasBitmap = 8521760;
+	a->registers[11].dereferencable = 1;
 	
 	strncpy(a->registers[12].name, "eax", 7);
-	a->registers[12].state = REGISTER_FREE;
+	a->registers[12].state = r32;
 	a->registers[12].size = 4;
-	a->registers[12].aliasBitmap = 4161;
+	a->registers[12].aliasBitmap = 266305;
+	a->registers[12].dereferencable = 1;
 	
 	strncpy(a->registers[13].name, "ebx", 7);
-	a->registers[13].state = REGISTER_FREE;
+	a->registers[13].state = r32;
 	a->registers[13].size = 4;
-	a->registers[13].aliasBitmap = 8322;
+	a->registers[13].aliasBitmap = 532610;
+	a->registers[13].dereferencable = 1;
 	
 	strncpy(a->registers[14].name, "ecx", 7);
-	a->registers[14].state = REGISTER_FREE;
+	a->registers[14].state = r32;
 	a->registers[14].size = 4;
-	a->registers[14].aliasBitmap = 16644;
+	a->registers[14].aliasBitmap = 1065220;
+	a->registers[14].dereferencable = 1;
 	
 	strncpy(a->registers[15].name, "edx", 7);
-	a->registers[15].state = REGISTER_FREE;
+	a->registers[15].state = r32;
 	a->registers[15].size = 4;
-	a->registers[15].aliasBitmap = 33288;
+	a->registers[15].aliasBitmap = 2130440;
+	a->registers[15].dereferencable = 1;
 	
 	strncpy(a->registers[16].name, "esi", 7);
-	a->registers[16].state = REGISTER_FREE;
+	a->registers[16].state = r32;
 	a->registers[16].size = 4;
-	a->registers[16].aliasBitmap = 66576;
+	a->registers[16].aliasBitmap = 4260880;
+	a->registers[16].dereferencable = 1;
 	
 	strncpy(a->registers[17].name, "edi", 7);
-	a->registers[17].state = REGISTER_FREE;
+	a->registers[17].state = r32;
 	a->registers[17].size = 4;
-	a->registers[17].aliasBitmap = 133152;
+	a->registers[17].aliasBitmap = 8521760;
+	a->registers[17].dereferencable = 1;
+	
+	strncpy(a->registers[18].name, "rax", 7);
+	a->registers[18].state = r64;
+	a->registers[18].size = 8;
+	a->registers[18].aliasBitmap = 266305;
+	a->registers[18].dereferencable = 1;
+	
+	strncpy(a->registers[19].name, "rbx", 7);
+	a->registers[19].state = r64;
+	a->registers[19].size = 8;
+	a->registers[19].aliasBitmap = 532610;
+	a->registers[19].dereferencable = 1;
+	
+	strncpy(a->registers[20].name, "rcx", 7);
+	a->registers[20].state = r64;
+	a->registers[20].size = 8;
+	a->registers[20].aliasBitmap = 1065220;
+	a->registers[20].dereferencable = 1;
+	
+	strncpy(a->registers[21].name, "rdx", 7);
+	a->registers[21].state = r64;
+	a->registers[21].size = 8;
+	a->registers[21].aliasBitmap = 2130440;
+	a->registers[21].dereferencable = 1;
+	
+	strncpy(a->registers[22].name, "rsi", 7);
+	a->registers[22].state = r64;
+	a->registers[22].size = 8;
+	a->registers[22].aliasBitmap = 4260880;
+	a->registers[22].dereferencable = 1;
+	
+	strncpy(a->registers[23].name, "rdi", 7);
+	a->registers[23].state = r64;
+	a->registers[23].size = 8;
+	a->registers[23].aliasBitmap = 8521760;
+	a->registers[23].dereferencable = 1;
 	
 	return a;
 }
@@ -219,6 +276,7 @@ static X86AllocationInfo *x86_makeregavailable(X86 *X, int id) {
 	n->size = register_size(id);
 	n->refcount = 1;
 	n->regId = id;
+	n->parent = NULL;
 	
 	if(X->rallocator->registers[id].state != REGISTER_FREE) {
 		x86_spill(X, id);
@@ -228,8 +286,8 @@ static X86AllocationInfo *x86_makeregavailable(X86 *X, int id) {
 	return n;
 }
 
-static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
-	int id = ralloc_alloc(X->rallocator, sz);
+static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz, int dereferencable) {
+	int id = ralloc_alloc(X->rallocator, sz, dereferencable);
 	if(id == -1) return x86_makeregavailable(X, cast_register(ralloc_findname(X->rallocator, "edi"), sz));
 	
 	X86AllocationInfo *n = malloc(sizeof(*n));
@@ -237,17 +295,19 @@ static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz) {
 	n->size = sz;
 	n->refcount = 1;
 	n->regId = id;
+	n->parent = NULL;
 	ralloc_setuserdata(X->rallocator, id, n);
 	
 	return n;
 }
 
-static X86AllocationInfo *x86_allocate(X86 *X, size_t sz) {
+static X86AllocationInfo *x86_allocate(X86 *X, size_t sz, int dereferencable) {
 	X86AllocationInfo *ret = malloc(sizeof(*ret));
 	ret->size = sz;
 	ret->refcount = 1;
+	ret->parent = NULL;
 	
-	int reg = ralloc_alloc(X->rallocator, sz);
+	int reg = ralloc_alloc(X->rallocator, sz, dereferencable);
 	ralloc_setuserdata(X->rallocator, reg, ret);
 	
 	if(reg != -1) {
@@ -270,16 +330,43 @@ static void x86_free(X86 *X, X86AllocationInfo *info) {
 	}
 }
 
+static X86AllocationInfo *x86_deref(X86 *X, X86AllocationInfo *info, size_t sz) {
+	X86AllocationInfo *i = malloc(sizeof(*i));
+	i->strategy = X86_ALLOC_REG_DEREF;
+	i->size = sz;
+	i->parent = info;
+	i->refcount = 1;
+	return i;
+}
+
+X86AllocationInfo* x86_cast_alloc(X86 *X, X86AllocationInfo *info, int size);
+
 static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) {
 	if(coerceToSize == -1) coerceToSize = info->size;
 	
 	switch(info->strategy) {
 	case X86_ALLOC_REG: {
+		if(info->parent && info->parent->regId != info->regId) { /* TODO: Fix corrupted info */
+			abort();
+		}
+		
 		int id = cast_register(info->regId, coerceToSize);
 #ifdef SYNTAX_GAS
 		return dstrfmt(dstrempty(), "%%%s", X->rallocator->registers[id].name);
 #else
 		return dstrfmt(dstrempty(), "%s", X->rallocator->registers[id].name);
+#endif
+	}
+	case X86_ALLOC_REG_DEREF: {
+		if(info->parent->strategy != X86_ALLOC_REG) { /* It could've been moved before this function call, so move it back. */
+			abort();
+		}
+		
+		int id = info->parent->regId;
+#ifdef SYNTAX_GAS
+		return dstrfmt(dstrempty(), "(%%%s)", X->rallocator->registers[id].name);
+#else
+		return dstrfmt(dstrempty(), "%s[%s]", yasm_sizespecifier(coerceToSize), X->rallocator->registers[id].name);
 #endif
 	}
 	case X86_ALLOC_STACK:
@@ -290,9 +377,9 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 #endif
 	case X86_ALLOC_MEM:
 #ifdef SYNTAX_GAS
-		return dstrfmt(dstrempty(), "$%s", info->memName);
-#else
 		return dstrfmt(dstrempty(), "%s", info->memName);
+#else
+		return dstrfmt(dstrempty(), "[%s]", info->memName);
 #endif
 	}
 	return NULL;
@@ -313,14 +400,22 @@ static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	int dstSize = dst->size, srcSize = dst->size;
+	int dstSize = dst->size, srcSize = src->size;
+	
+	if(srcSize > dstSize) {
+		srcSize = dstSize;
+	}
 	
 	/* Don't accidentally use sil or dil if not supported. */
 	if(src->strategy == X86_ALLOC_REG) {
 		while(X->rallocator->registers[cast_register(src->regId, srcSize)].state == REGISTER_DOESNT_EXIST) {
 			srcSize *= 2;
 		}
-		dstSize = dstSize < srcSize ? srcSize : dstSize;
+	}
+	if(dst->strategy == X86_ALLOC_REG) {
+		while(X->rallocator->registers[cast_register(dst->regId, dstSize)].state == REGISTER_DOESNT_EXIST) {
+			dstSize *= 2;
+		}
 	}
 	
 	dstr s = gdescribeinfo(X, src, srcSize), d = gdescribeinfo(X, dst, dstSize);
@@ -334,7 +429,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 		X->text = dstrfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size, 0);
 		
 		gmov(X, tmp, src);
 		gmov(X, dst, tmp);
@@ -356,6 +451,10 @@ static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
 }
 
 static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int isSub) {
+	if(src->size != dst->size) {
+		src = x86_cast_alloc(X, src, dst->size);
+	}
+	
 	dstr s = gdescribeinfo(X, src, dst->size);
 	dstr d = gdescribeinfo(X, dst, dst->size);
 	
@@ -366,7 +465,7 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
-		X86AllocationInfo *tmp = x86_allocreg(X, dst->size);
+		X86AllocationInfo *tmp = x86_allocreg(X, dst->size, 0);
 		
 		gmov(X, tmp, src);
 		gaddsub(X, dst, tmp, isSub);
@@ -391,19 +490,6 @@ static void gcmp0(X86 *X, X86AllocationInfo *info) {
 	dstrfree(i);
 }
 
-static void gderef(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
-	dstr d = gdescribeinfo(X, dst, -1), s = gdescribeinfo(X, src, -1);
-	
-#ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "mov (%S), %S\n", s, d);
-#else
-	X->text = dstrfmt(X->text, "mov %S, [%S]\n", d, s);
-#endif
-	
-	dstrfree(d);
-	dstrfree(s);
-}
-
 static void gcall(X86 *X, X86AllocationInfo *what) {
 	dstr w = gdescribeinfo(X, what, -1);
 	X->text = dstrfmt(X->text, "call %S\n", w);
@@ -423,15 +509,77 @@ void x86_new(X86 *X) {
 	
 	X->loopStackIndex = 0;
 	
-	X->target = X86_TARGET_80386;
-	X->mode = X86_MODE_32;
+	X->mode = X86_MODE_UNSELECTED;
+	
+	const char *argMode = ntc_get_arg("x86_mode");
+	if(argMode) {
+		if(!strcmp(argMode, "16")) {
+			X->mode = X86_MODE_16;
+		} else if(!strcmp(argMode, "32")) {
+			X->mode = X86_MODE_32;
+		} else if(!strcmp(argMode, "64")) {
+			X->mode = X86_MODE_64;
+		}
+	}
+	
+	const char *argTarget = ntc_get_arg("x86_target");
+	if(!argTarget || !strcmp(argTarget, "3")) {
+		X->target = X86_TARGET_80386;
+		
+		if(X->mode == X86_MODE_64) {
+			stahp(-1, -1, "Invalid x86_target and x86_mode combination.");
+		}
+		
+		if(X->mode == X86_MODE_UNSELECTED) {
+			X->mode = X86_MODE_32;
+		}
+	} else if(!strcmp(argTarget, "0")) {
+		X->target = X86_TARGET_8086;
+		
+		if(X->mode == X86_MODE_32 || X->mode == X86_MODE_64) {
+			stahp(-1, -1, "Invalid x86_target and x86_mode combination.");
+		}
+		
+		X->mode = X86_MODE_16;
+	} else if(!strcmp(argTarget, "m")) {
+		X->target = X86_TARGET_M;
+		
+		if(X->mode == X86_MODE_UNSELECTED) {
+			X->mode = X86_MODE_64;
+		}
+	} else {
+		stahp(-1, -1, "Invalid x86_target argument. Supported ones: 0, 3, m.");
+	}
 	
 	X->rallocator = create_ralloc(X);
 }
 
+X86AllocationInfo* x86_cast_alloc(X86 *X, X86AllocationInfo *info, int size) {
+	if(info->strategy == X86_ALLOC_REG) {
+		X86AllocationInfo *n = malloc(sizeof(*n));
+		n->strategy = X86_ALLOC_REG;
+		n->size = size;
+		n->regId = info->regId;
+		n->parent = info;
+		n->refcount = 1;
+		
+		return n;
+	} else {
+		X86AllocationInfo *n = malloc(sizeof(*n));
+		n->strategy = X86_ALLOC_REG;
+		n->size = size;
+		n->refcount = 1;
+		n->parent = info;
+		
+		gmov(X, n, info);
+		
+		return n;
+	}
+}
+
 X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst) {
 	if(ast->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-		if(!dst) dst = x86_allocate(X, 4);
+		if(!dst) dst = x86_allocate(X, 2, 0);
 		
 		gmovi(X, dst, ast->expressionPrimitive.numerator / ast->expressionPrimitive.denominator);
 		
@@ -461,7 +609,7 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			return vi;
 		}
 	} else if(ast->nodeKind == AST_EXPRESSION_BINARY_OP) {
-		if(!dst) dst = x86_allocate(X, 4);
+		if(!dst) dst = x86_allocate(X, 2, 0);
 		
 		x86_visit_expression(X, ast->expressionBinaryOp.operands[0], dst);
 		
@@ -479,15 +627,23 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		return dst;
 	} else if(ast->nodeKind == AST_EXPRESSION_UNARY_OP) {
 		if(ast->expressionUnaryOp.operator == UNOP_DEREF) {
-			if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
+			//~ if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of));
 			
 			X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
-			gderef(X, dst, a);
-			x86_free(X, a);
 			
-			return dst;
+			X86AllocationInfo *b = malloc(sizeof(*b));
+			b->strategy = X86_ALLOC_REG_DEREF;
+			b->size = type_size(ast->expressionUnaryOp.chaiuld->expression.type->pointer.of);
+			b->parent = a;
+			b->refcount = 1;
+			
+			if(dst) {
+				gmov(X, dst, b);
+			} else {
+				return b;
+			}
 		} else {
-			if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type));
+			if(!dst) dst = x86_allocate(X, type_size(ast->expressionUnaryOp.chaiuld->expression.type), 0);
 			
 			X86AllocationInfo *a = x86_visit_expression(X, ast->expressionUnaryOp.chaiuld, NULL);
 			gmov(X, dst, a);
@@ -497,12 +653,13 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			return dst;
 		}
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
+		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
+		
 		X86AllocationInfo *r = x86_makeregavailable(X, ralloc_findname(X->rallocator, "eax"));
 		
 		gpushr(X, "ecx");
 		gpushr(X, "edx");
 		
-		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
 		gcall(X, i);
 		x86_free(X, i);
 		
@@ -511,9 +668,8 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		
 		return r;
 	}
-
+	
 	abort();
-	return NULL;
 }
 
 AST *x86_visit_statement(X86 *X, AST *ast) {
@@ -552,13 +708,12 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 			info->memName = ent->data.symbol.linkName;
 			info->size = type_size(ent->type);
 			info->refcount = 1;
+			info->parent = NULL;
 			
 			ent->userdata = info;
 		} else if(ent->kind == VARTABLEENTRY_VAR) {
-			X86AllocationInfo *info = x86_allocate(X, type_size(ent->type));
-			x86_visit_expression(X, ast->statementDecl.expression, info);
-			
-			ent->userdata = info;
+			Type *type = ent->type;
+			ent->userdata = x86_visit_expression(X, ast->statementDecl.expression, x86_allocate(X, type_size(type), ent->isDereferenced));
 		}
 	} else if(ast->nodeKind == AST_STATEMENT_IF) {
 		switch(ast->statementIf.expression->expression.constantType) {

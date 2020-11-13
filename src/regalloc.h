@@ -14,6 +14,7 @@ typedef struct {
 	RegisterState state;
 	uint8_t size;
 	uint32_t aliasBitmap;
+	uint8_t dereferencable;
 	
 	void *userdata;
 } Register;
@@ -23,7 +24,7 @@ typedef struct {
 	Register registers[];
 } RegisterAllocator;
 
-int ralloc_alloc(RegisterAllocator*, uint8_t size);
+int ralloc_alloc(RegisterAllocator*, uint8_t size, int dereferencable);
 void ralloc_free(RegisterAllocator*, int);
 int ralloc_findname(RegisterAllocator*, const char*);
 void ralloc_setuserdata(RegisterAllocator*, int, void*);

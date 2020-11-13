@@ -5,6 +5,8 @@
 #include<string.h>
 #include<stdint.h>
 
+#include"ntc.h"
+
 TypePrimitive *primitiveDatabase[128];
 
 TypePrimitive *primitive_parse(const char *src) {
@@ -92,7 +94,14 @@ size_t type_size(Type *t) {
 		
 		return w;
 	} else if(t->type == TYPE_TYPE_POINTER) {
-		return 4;
+		switch(Xinst.mode) {
+			case X86_MODE_16: return 2;
+			case X86_MODE_32: return 4;
+			case X86_MODE_64: return 8;
+#ifdef DEBUG
+			default: abort();
+#endif
+		}
 	} else if(t->type == TYPE_TYPE_FUNCTION) {
 		return 1; /* TODO: improve. */
 	}

@@ -53,7 +53,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 		if(peek(P, 0).type == TOKEN_NUMBER) {
 			ASTExpressionPrimitive *ret = malloc(sizeof(*ret));
 			ret->nodeKind = AST_EXPRESSION_PRIMITIVE;
-			ret->type = (Type*) primitive_parse("s32");
+			ret->type = (Type*) primitive_parse("s16");
 			
 			Token tok = get(P);
 			
@@ -89,7 +89,11 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			astop->constantType = EXPRESSION_NOT_CONSTANT;
 			astop->operator = UNOP_DEREF;
 			astop->chaiuld = nct_parse_expression(P, lOP); /* Not +1! */
-			astop->type = type_pointer_wrap((Type*) astop->chaiuld->expression.type);
+			astop->type = astop->chaiuld->expression.type->pointer.of;
+			
+			if(astop->chaiuld->nodeKind == AST_EXPRESSION_VAR) {
+				astop->chaiuld->expressionVar.thing->isDereferenced = 1;
+			}
 			
 			return (AST*) astop;
 		} else if(maybe(P, TOKEN_MINUS)) {
@@ -175,7 +179,19 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 				}
 				
 				astop->operators[astop->amountOfOperands - 1] = op;
-				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1);
+				ASTExpression *operand = &(astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1))->expression;
+				
+				if(operand->type->type != TYPE_TYPE_PRIMITIVE) {
+					stahp(P->tokens[P->i].row, P->tokens[P->i].column, "Invalid combination of operator and operand types.");
+  				}
+  				
+  				if(!astop->type) {
+					astop->type = operand->type;
+				} else {
+					if(type_size(operand->type) > type_size(astop->type)) {
+						astop->type = operand->type;
+					}
+				}
 			}
 			
 			ret = (AST*) astop;
@@ -196,6 +212,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
 			astop->constantType = EXPRESSION_NOT_CONSTANT;
 			astop->amountOfOperands = 1;
+			astop->type = NULL;
 			
 			size_t capacity = 2;
 			astop->operands = malloc(sizeof(*astop->operands) * capacity);
@@ -220,7 +237,19 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 				}
 				
 				astop->operators[astop->amountOfOperands - 1] = op;
-				astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1);
+				ASTExpression *operand = &(astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1))->expression;
+				
+				if(operand->type->type != TYPE_TYPE_PRIMITIVE) {
+					stahp(P->tokens[P->i].row, P->tokens[P->i].column, "Invalid combination of operator and operand types.");
+  				}
+  				
+  				if(!astop->type) {
+					astop->type = operand->type;
+				} else {
+					if(type_size(operand->type) > type_size(astop->type)) {
+						astop->type = operand->type;
+					}
+				}
 			}
 			
 			ret = (AST*) astop;
@@ -283,6 +312,7 @@ static AST *parse_declaration(Parser *P) {
 	VarTableEntry *entry = malloc(sizeof(*entry));
 	entry->name = name.content;
 	entry->type = type;
+	entry->isDereferenced = 0;
 	vartable_set(P->scope, entry);
 	
 	ASTStatementDecl *ret = malloc(sizeof(*ret));
