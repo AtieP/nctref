@@ -183,7 +183,7 @@ static RegisterAllocator *create_ralloc(X86 *X) {
 	return a;
 }
 
-static char *yasm_directname(int bytes) {
+static const char *yasm_directname(int bytes) {
 	switch(bytes) {
 #ifdef SYNTAX_GAS
 	case 1:
@@ -210,7 +210,7 @@ static char *yasm_directname(int bytes) {
 	return NULL;
 }
 
-static char *yasm_sizespecifier(int bytes) {
+static const char *yasm_sizespecifier(int bytes) {
 	switch(bytes) {
 #ifdef SYNTAX_GAS
 	case 1:
@@ -234,22 +234,21 @@ static char *yasm_sizespecifier(int bytes) {
 	}
 
 	abort();
-	return NULL;
 }
 
-static void gpushr(X86 *X, const char *reg) {
+static void gpushr(X86 *X, int i) {
 #ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "push %%%s\n", reg);
+	X->text = dstrfmt(X->text, "push %%%s\n", X->rallocator->registers[i].name);
 #else
-	X->text = dstrfmt(X->text, "push %s\n", reg);
+	X->text = dstrfmt(X->text, "push %s\n", X->rallocator->registers[i].name);
 #endif
 }
 
-static void gpopr(X86 *X, const char *reg) {
+static void gpopr(X86 *X, int i) {
 #ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "pop %%%s\n", reg);
+	X->text = dstrfmt(X->text, "pop %%%s\n", X->rallocator->registers[i].name);
 #else
-	X->text = dstrfmt(X->text, "pop %s\n", reg);
+	X->text = dstrfmt(X->text, "pop %s\n", X->rallocator->registers[i].name);
 #endif
 }
 
@@ -262,7 +261,7 @@ static void gglobal(X86 *X, const char *sym) {
 }
 
 static void x86_spill(X86 *X, int reg) {
-	gpushr(X, X->rallocator->registers[cast_register(reg, 4)].name);
+	gpushr(X, cast_register(reg, 4));
 	
 	X86AllocationInfo *info = X->rallocator->registers[reg].userdata;
 	info->strategy = X86_ALLOC_STACK;
@@ -379,7 +378,7 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 #ifdef SYNTAX_GAS
 		return dstrfmt(dstrempty(), "%s", info->memName);
 #else
-		return dstrfmt(dstrempty(), "[%s]", info->memName);
+		return dstrfmt(dstrempty(), "%s[%s]", yasm_sizespecifier(coerceToSize), info->memName);
 #endif
 	}
 	return NULL;
@@ -388,10 +387,14 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 static void gmovi(X86 *X, X86AllocationInfo *info, size_t val) {
 	dstr i = gdescribeinfo(X, info, -1);
 	if(val == 0 && info->strategy == X86_ALLOC_REG) {
+#ifdef SYNTAX_GAS
+		X->text = dstrfmt(X->text, "xor%s %S, %S\n", yasm_sizespecifier(info->size), i, i);
+#else
 		X->text = dstrfmt(X->text, "xor %S, %S\n", i, i);
+#endif
 	} else {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "mov $%i, %S\n", val, i);
+		X->text = dstrfmt(X->text, "mov%s $%i, %S\n", yasm_sizespecifier(info->size), val, i);
 #else
 		X->text = dstrfmt(X->text, "mov %S, %i\n", i, val);
 #endif
@@ -424,7 +427,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "mov%s%s%s %S, %S\n", zx ? "z" : "", zx ? yasm_sizespecifier(src->size) : "", zx ? yasm_sizespecifier(dst->size) : "", s, d);
+		X->text = dstrfmt(X->text, "mov%s%s%s %S, %S\n", zx ? "z" : "", zx ? yasm_sizespecifier(src->size) : "", yasm_sizespecifier(dst->size), s, d);
 #else
 		X->text = dstrfmt(X->text, "mov%s %s, %s\n", zx ? "zx" : "", d, s);
 #endif
@@ -443,7 +446,7 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
 	dstr i = gdescribeinfo(X, info, -1);
 #ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "add $%i, %S\n", val, i);
+	X->text = dstrfmt(X->text, "add%s $%i, %S\n", yasm_sizespecifier(info->size), val, i);
 #else
 	X->text = dstrfmt(X->text, "add %S, %i\n", i, val);
 #endif
@@ -460,7 +463,7 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", s, d);
+		X->text = dstrfmt(X->text, "%s%s %S, %S\n", isSub ? "sub" : "add", yasm_sizespecifier(dst->size), s, d);
 #else
 		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
 #endif
@@ -479,10 +482,14 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 static void gcmp0(X86 *X, X86AllocationInfo *info) {
 	dstr i = gdescribeinfo(X, info, -1);
 	if(info->strategy == X86_ALLOC_REG) {
+#ifdef SYNTAX_GAS
+		X->text = dstrfmt(X->text, "test%s %S, %S\n", yasm_sizespecifier(info->size), i, i);
+#else
 		X->text = dstrfmt(X->text, "test %S, %S\n", i, i);
+#endif
 	} else {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "cmp $0, %S\n", i);
+		X->text = dstrfmt(X->text, "cmp%s $0, %S\n", yasm_sizespecifier(info->size), i);
 #else
 		X->text = dstrfmt(X->text, "cmp %S, 0\n", i);
 #endif
@@ -498,7 +505,11 @@ static void gcall(X86 *X, X86AllocationInfo *what) {
 
 static void gneg(X86 *X, X86AllocationInfo *info) {
 	dstr i = gdescribeinfo(X, info, -1);
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "neg%s %S\n", yasm_sizespecifier(info->size), i);
+#else
 	X->text = dstrfmt(X->text, "neg %S\n", i);
+#endif
 	dstrfree(i);
 }
 
@@ -657,14 +668,14 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		
 		X86AllocationInfo *r = x86_makeregavailable(X, ralloc_findname(X->rallocator, "eax"));
 		
-		gpushr(X, "ecx");
-		gpushr(X, "edx");
+		gpushr(X, ralloc_findname(X->rallocator, "ecx"));
+		gpushr(X, ralloc_findname(X->rallocator, "edx"));
 		
 		gcall(X, i);
 		x86_free(X, i);
 		
-		gpopr(X, "edx");
-		gpopr(X, "ecx");
+		gpopr(X, ralloc_findname(X->rallocator, "edx"));
+		gpopr(X, ralloc_findname(X->rallocator, "ecx"));
 		
 		return r;
 	}
