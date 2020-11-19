@@ -24,7 +24,8 @@ typedef struct {
 	Register registers[];
 } RegisterAllocator;
 
-int ralloc_alloc(RegisterAllocator*, uint8_t size, int dereferencable);
+int ralloc_allocsz(RegisterAllocator*, uint8_t size, int dereferencable);
+int ralloc_allocid(RegisterAllocator*, int i);
 void ralloc_free(RegisterAllocator*, int);
 int ralloc_findname(RegisterAllocator*, const char*);
 void ralloc_setuserdata(RegisterAllocator*, int, void*);

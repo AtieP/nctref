@@ -142,6 +142,10 @@ Token nct_tokenize(FILE *f) {
 		}
 	} else if(c == '=') {
 		tok.type = TOKEN_EQUALS;
+		int c = nextc(f);
+		if(c == '=') {
+			tok.type = TOKEN_DOUBLE_EQUALS;
+		} else ungetc(c, f);
 		return tok;
 	} else if(c == ',') {
 		tok.type = TOKEN_COMMA;

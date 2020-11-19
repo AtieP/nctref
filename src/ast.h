@@ -17,7 +17,8 @@ typedef enum {
 	AST_EXPRESSION_UNARY_OP,
 	AST_STATEMENT_LOOP,
 	AST_STATEMENT_BREAK,
-	AST_EXPRESSION_CALL
+	AST_EXPRESSION_CALL,
+	AST_STATEMENT_EXPR,
 } ASTKind;
 
 typedef enum {
@@ -27,14 +28,15 @@ typedef enum {
 	BINOP_DIV = 3,
 	BINOP_BITWISE_AND = 4,
 	BINOP_BITWISE_OR = 5,
-	BINOP_BITWISE_XOR = 6
+	BINOP_BITWISE_XOR = 6,
+	BINOP_EQUAL = 7,
 } BinaryOp;
 extern int BINOP_COMMUTATIVE[];
 
 typedef enum {
 	UNOP_DEREF = 0,
 	UNOP_NEGATE = 1,
-	UNOP_BITWISE_NOT = 2
+	UNOP_BITWISE_NOT = 2,
 } UnaryOp;
 
 typedef enum {
@@ -84,6 +86,7 @@ typedef struct {
 	ASTExpression;
 	
 	union AST *what;
+	
 	union AST **args;
 } ASTExpressionCall;
 
@@ -145,6 +148,12 @@ typedef struct {
 	ASTStatement;
 } ASTStatementBreak;
 
+typedef struct {
+	ASTStatement;
+	
+	union AST *expr;
+} ASTStatementExpr;
+
 typedef union AST {
 	ASTKind nodeKind;
 	
@@ -154,6 +163,7 @@ typedef union AST {
 	ASTStatementIf statementIf;
 	ASTStatementLoop statementLoop;
 	ASTStatementBreak statementBreak;
+	ASTStatementExpr statementExpr;
 	ASTExpression expression;
 	ASTExpressionPrimitive expressionPrimitive;
 	ASTExpressionBinaryOp expressionBinaryOp;

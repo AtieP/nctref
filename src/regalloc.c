@@ -3,7 +3,7 @@
 #include<stdlib.h>
 #include<string.h>
 
-int ralloc_alloc(RegisterAllocator *this, uint8_t size, int dereferencable) {
+int ralloc_allocsz(RegisterAllocator *this, uint8_t size, int dereferencable) {
 	uint8_t i;
 	for(i = 0; i < this->registersCount; i++) {
 		if(this->registers[i].state == REGISTER_FREE && size == this->registers[i].size && (this->registers[i].dereferencable >= dereferencable)) {
@@ -13,6 +13,25 @@ int ralloc_alloc(RegisterAllocator *this, uint8_t size, int dereferencable) {
 	
 	return -1;
 found:;
+	Register *r = &this->registers[i];
+	r->state = REGISTER_ALLOCATED;
+	
+	for(size_t b = 0; b < (sizeof(r->aliasBitmap) * 8) && b < this->registersCount; b++) {
+		if(b != i && (r->aliasBitmap & (1 << b))) {
+			if(this->registers[b].state != REGISTER_DOESNT_EXIST) {
+				this->registers[b].state = REGISTER_ALIASED_ALLOCATED;
+			}
+		}
+	}
+	
+	ralloc_setuserdata(this, i, NULL);
+	
+	return i;
+}
+
+int ralloc_allocid(RegisterAllocator *this, int i) {
+	if(this->registers[i].state != REGISTER_FREE) return -1;
+	
 	Register *r = &this->registers[i];
 	r->state = REGISTER_ALLOCATED;
 	

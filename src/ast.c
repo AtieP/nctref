@@ -38,27 +38,27 @@ AST *ast_expression_optimize(AST *ast) {
 		int *constont = NULL;
 		
 		for(size_t i = 0; i < ast->expressionBinaryOp.amountOfOperands; i++) {
-			//~ ast->expressionBinaryOp.operands[i] = ast_expression_optimize(ast->expressionBinaryOp.operands[i]);
+			ast->expressionBinaryOp.operands[i] = ast_expression_optimize(ast->expressionBinaryOp.operands[i]);
 			
-			for(size_t j = 0; j < ast->expressionBinaryOp.amountOfOperands; j++) {
-				if(i == j) continue;
+			//~ for(size_t j = 0; j < ast->expressionBinaryOp.amountOfOperands; j++) {
+				//~ if(i == j) continue;
 				
-				if(
-					(
-						(i == 0 || ast->expressionBinaryOp.operators[i - 1] == BINOP_ADD)
-					    && (j != 0 && ast->expressionBinaryOp.operators[j - 1] == BINOP_SUB)
-					)
-					||
-					(
-						(j == 0 || ast->expressionBinaryOp.operators[j - 1] == BINOP_ADD)
-						&& (i != 0 && ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB)
-					)
-				) {
+				//~ if(
+					//~ (
+						//~ (i == 0 || ast->expressionBinaryOp.operators[i - 1] == BINOP_ADD)
+					    //~ && (j != 0 && ast->expressionBinaryOp.operators[j - 1] == BINOP_SUB)
+					//~ )
+					//~ ||
+					//~ (
+						//~ (j == 0 || ast->expressionBinaryOp.operators[j - 1] == BINOP_ADD)
+						//~ && (i != 0 && ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB)
+					//~ )
+				//~ ) {
 					
-					ast_expression_binop_removeoperand(ast, i);
-					ast_expression_binop_removeoperand(ast, (j > i) ? (j - 1) : j);
-				}
-			}
+					//~ ast_expression_binop_removeoperand(ast, i);
+					//~ ast_expression_binop_removeoperand(ast, (j > i) ? (j - 1) : j);
+				//~ }
+			//~ }
 			
 			if(ast->expressionBinaryOp.amountOfOperands == 0) {
 				free(ast);

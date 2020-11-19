@@ -29,7 +29,7 @@ typedef struct {
 } X86;
 
 typedef enum {
-	X86_ALLOC_STACK, X86_ALLOC_REG, X86_ALLOC_MEM, X86_ALLOC_REG_DEREF
+	X86_ALLOC_STACK, X86_ALLOC_REG, X86_ALLOC_MEM, X86_ALLOC_MEM_DEREF, X86_ALLOC_REG_DEREF
 } X86AllocationStrategy;
 
 typedef struct X86AllocationInfo {

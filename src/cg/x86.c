@@ -5,6 +5,15 @@
 #include"reporting.h"
 #include"ntc.h"
 
+/* A serious potential bug exists in the implementation of X86AllocationInfo and
+ * it's methods. Register infos with parents should share a common aliased
+ * register. If a parent or child info begins using a different register, they
+ * will become inconsistent. This will cause the code generator to use incorrect
+ * registers. This bug is not fixed. It is only checked for partially in
+ * gdescribeinfo, but it's solution is insufficient. When this bug happens, it
+ * will be difficult to catch. This comment is a warning about that inevitable
+ * event. I cannot think of a good solution. */
+
 #ifndef __GNUC__
 int __builtin_ctz(uint8_t i) {
 	if(i & 1) return 0;
@@ -252,6 +261,24 @@ static void gpopr(X86 *X, int i) {
 #endif
 }
 
+static void gaddsp(X86 *X, int i) {
+	const char *reg;
+	switch(X->mode) {
+		case X86_MODE_16: reg = "sp"; break;
+		case X86_MODE_32: reg = "esp"; break;
+		case X86_MODE_64: reg = "rsp"; break;
+#ifdef DEBUG
+		default: abort();
+#endif
+	}
+	
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "add $%i, %%%s\n", i, reg);
+#else
+	X->text = dstrfmt(X->text, "add %s, %i\n", reg, i);
+#endif
+}
+
 static void gglobal(X86 *X, const char *sym) {
 #ifdef SYNTAX_GAS
 	X->text = dstrfmt(X->text, ".global %s\n", sym);
@@ -260,12 +287,25 @@ static void gglobal(X86 *X, const char *sym) {
 #endif
 }
 
+static int x86_getwordsize(X86 *X) {
+	switch(X->mode) {
+		case X86_MODE_16: return 2;
+		case X86_MODE_32: return 4;
+		case X86_MODE_64: return 8;
+#ifdef DEBUG
+		default: abort();
+#endif
+	}
+}
+
 static void x86_spill(X86 *X, int reg) {
-	gpushr(X, cast_register(reg, 4));
+	gpushr(X, cast_register(reg, x86_getwordsize(X)));
 	
 	X86AllocationInfo *info = X->rallocator->registers[reg].userdata;
 	info->strategy = X86_ALLOC_STACK;
 	info->stackDepth = X->stackDepth -= ((info->size + 3) % 4);
+	
+	ralloc_free(X->rallocator, reg);
 }
 
 /* Use when a register is necessary, else use x86_allocate, which may use the stack instead. */
@@ -279,14 +319,16 @@ static X86AllocationInfo *x86_makeregavailable(X86 *X, int id) {
 	
 	if(X->rallocator->registers[id].state != REGISTER_FREE) {
 		x86_spill(X, id);
-		ralloc_setuserdata(X->rallocator, id, n);
 	}
+	
+	ralloc_allocid(X->rallocator, id);
+	ralloc_setuserdata(X->rallocator, id, n);
 	
 	return n;
 }
 
 static X86AllocationInfo *x86_allocreg(X86 *X, size_t sz, int dereferencable) {
-	int id = ralloc_alloc(X->rallocator, sz, dereferencable);
+	int id = ralloc_allocsz(X->rallocator, sz, dereferencable);
 	if(id == -1) return x86_makeregavailable(X, cast_register(ralloc_findname(X->rallocator, "edi"), sz));
 	
 	X86AllocationInfo *n = malloc(sizeof(*n));
@@ -306,7 +348,7 @@ static X86AllocationInfo *x86_allocate(X86 *X, size_t sz, int dereferencable) {
 	ret->refcount = 1;
 	ret->parent = NULL;
 	
-	int reg = ralloc_alloc(X->rallocator, sz, dereferencable);
+	int reg = ralloc_allocsz(X->rallocator, sz, dereferencable);
 	ralloc_setuserdata(X->rallocator, reg, ret);
 	
 	if(reg != -1) {
@@ -345,8 +387,8 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 	
 	switch(info->strategy) {
 	case X86_ALLOC_REG: {
-		if(info->parent && info->parent->regId != info->regId) { /* TODO: Fix corrupted info */
-			abort();
+		if(info->parent && info->parent->regId != info->regId) { /* Fix corrupted info */
+			info->regId = cast_register(info->parent->regId, info->size);
 		}
 		
 		int id = cast_register(info->regId, coerceToSize);
@@ -358,7 +400,11 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 	}
 	case X86_ALLOC_REG_DEREF: {
 		if(info->parent->strategy != X86_ALLOC_REG) { /* It could've been moved before this function call, so move it back. */
-			abort();
+			/* Hope to GOD this doesn't break! */
+			X86AllocationInfo *tmp = x86_allocreg(X, coerceToSize, 1);
+			dstr ret = gdescribeinfo(X, tmp, -1);
+			x86_free(X, tmp);
+			return ret;
 		}
 		
 		int id = info->parent->regId;
@@ -375,6 +421,12 @@ static dstr gdescribeinfo(X86 *X, X86AllocationInfo *info, size_t coerceToSize) 
 		return dstrfmt(dstrempty(), "%s[esp%s%i]", yasm_sizespecifier(coerceToSize), (X->stackDepth - info->stackDepth) >= 0 ? "+" : "", X->stackDepth - info->stackDepth);
 #endif
 	case X86_ALLOC_MEM:
+#ifdef SYNTAX_GAS
+		return dstrfmt(dstrempty(), "$%s", info->memName);
+#else
+		return dstrfmt(dstrempty(), "%s", info->memName);
+#endif
+	case X86_ALLOC_MEM_DEREF:
 #ifdef SYNTAX_GAS
 		return dstrfmt(dstrempty(), "%s", info->memName);
 #else
@@ -441,6 +493,14 @@ static void gmov(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src) {
 	}
 	dstrfree(s);
 	dstrfree(d);
+}
+
+static void gpushi(X86 *X, int64_t val) {
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "push $%i\n", val);
+#else
+	X->text = dstrfmt(X->text, "push %i\n", val);
+#endif
 }
 
 static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
@@ -510,6 +570,22 @@ static void gneg(X86 *X, X86AllocationInfo *info) {
 #else
 	X->text = dstrfmt(X->text, "neg %S\n", i);
 #endif
+	dstrfree(i);
+}
+
+static void gpush(X86 *X, X86AllocationInfo *info) {
+	dstr i = gdescribeinfo(X, info, x86_getwordsize(X));
+	
+	X->text = dstrfmt(X->text, "push %S\n", i);
+	
+	dstrfree(i);
+}
+
+static void gpop(X86 *X, X86AllocationInfo *info) {
+	dstr i = gdescribeinfo(X, info, x86_getwordsize(X));
+	
+	X->text = dstrfmt(X->text, "pop %S\n", i);
+	
 	dstrfree(i);
 }
 
@@ -627,7 +703,13 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		for(size_t i = 1; i < ast->expressionBinaryOp.amountOfOperands; i++) {
 			AST *operand = ast->expressionBinaryOp.operands[i];
 			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-				gaddi(X, dst, operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator);
+				int64_t addend = operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator;
+				
+				if(ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB) {
+					addend = -addend;
+				}
+				
+				gaddi(X, dst, addend);
 			} else {
 				X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
 				gaddsub(X, dst, a, ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB);
@@ -664,18 +746,86 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 			return dst;
 		}
 	} else if(ast->nodeKind == AST_EXPRESSION_CALL) {
-		X86AllocationInfo *i = x86_visit_expression(X, ast->expressionCall.what, NULL);
+		X86AllocationInfo *what = x86_visit_expression(X, ast->expressionCall.what, NULL);
 		
-		X86AllocationInfo *r = x86_makeregavailable(X, ralloc_findname(X->rallocator, "eax"));
+		int wsz = x86_getwordsize(X);
 		
-		gpushr(X, ralloc_findname(X->rallocator, "ecx"));
-		gpushr(X, ralloc_findname(X->rallocator, "edx"));
+		Type *func = ast->expressionCall.what->expression.type;
+		int funcReturnsVoid = func->function.ret == NULL;
 		
-		gcall(X, i);
-		x86_free(X, i);
+		int accumulatorReg = ralloc_findname(X->rallocator, "al");
 		
-		gpopr(X, ralloc_findname(X->rallocator, "edx"));
-		gpopr(X, ralloc_findname(X->rallocator, "ecx"));
+		X86AllocationInfo *r;
+		if(funcReturnsVoid) {
+			r = NULL;
+			
+			if(X->rallocator->registers[accumulatorReg].state != REGISTER_FREE) {
+				gpushr(X, cast_register(accumulatorReg, wsz));
+			}
+		} else {
+			r = X->rallocator->registers[accumulatorReg].userdata;
+			if(r != dst) { /* No need to x86_makeregavailable if they're the same */
+				r = x86_makeregavailable(X, cast_register(accumulatorReg, wsz));
+			}
+		}
+		
+		int cIsFree = X->rallocator->registers[ralloc_findname(X->rallocator, "cl")].state == REGISTER_FREE;
+		int dIsFree = X->rallocator->registers[ralloc_findname(X->rallocator, "dl")].state == REGISTER_FREE;
+		
+		if(!cIsFree) {
+			gpushr(X, cast_register(ralloc_findname(X->rallocator, "cl"), wsz));
+		}
+		if(!dIsFree) {
+			gpushr(X, cast_register(ralloc_findname(X->rallocator, "dl"), wsz));
+		}
+		
+		X86AllocationInfo **argInfos = malloc(sizeof(*argInfos) * func->function.argCount);
+		
+		size_t argsSize = 0;
+		for(int i = 0; i < func->function.argCount; i++) {
+			argsSize += (type_size(func->function.args[i]) + 7) & ~7;
+			
+			/* This is primitive enough to not evalute in advance. */
+			if(ast->expressionCall.args[i]->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+				argInfos[i] = NULL;
+			} else {
+				argInfos[i] = x86_visit_expression(X, ast->expressionCall.args[i], NULL);
+			}
+		}
+		
+		for(int i = 0; i < func->function.argCount; i++) {
+			if(argInfos[i] == NULL) {
+				gpushi(X, ast->expressionCall.args[i]->expressionPrimitive.numerator);
+			} else {
+				gpush(X, argInfos[i]);
+			}
+		}
+		
+		gcall(X, what);
+		x86_free(X, what);
+		
+		if(argsSize != 0) {
+			gaddsp(X, argsSize);
+		}
+		
+		for(int i = 0; i < func->function.argCount; i++) {
+			if(argInfos[i]) {
+				x86_free(X, argInfos[i]);
+			}
+		}
+		
+		free(argInfos);
+		
+		if(!dIsFree) {
+			gpopr(X, cast_register(ralloc_findname(X->rallocator, "dl"), wsz));
+		}
+		if(!cIsFree) {
+			gpopr(X, cast_register(ralloc_findname(X->rallocator, "cl"), wsz));
+		}
+		
+		if(funcReturnsVoid && X->rallocator->registers[accumulatorReg].state != REGISTER_FREE) {
+			gpopr(X, cast_register(accumulatorReg, wsz));
+		}
 		
 		return r;
 	}
@@ -715,7 +865,7 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 			}
 			
 			X86AllocationInfo *info = malloc(sizeof(*info));
-			info->strategy = X86_ALLOC_MEM;
+			info->strategy = ent->type->type == TYPE_TYPE_FUNCTION ? X86_ALLOC_MEM : X86_ALLOC_MEM_DEREF;
 			info->memName = ent->data.symbol.linkName;
 			info->size = type_size(ent->type);
 			info->refcount = 1;
@@ -775,6 +925,12 @@ AST *x86_visit_statement(X86 *X, AST *ast) {
 #else
 		X->text = dstrfmt(X->text, "jmp .L%i\n", X->loopStack[X->loopStackIndex - 1]);
 #endif
+	} else if(ast->nodeKind == AST_STATEMENT_EXPR) {
+		X86AllocationInfo *i = x86_visit_expression(X, ast->statementExpr.expr, NULL);
+		
+		if(i) {
+			x86_free(X, i);
+		}
 	} else {
 		abort(); /* TODO: better error handling, maybe with setjmp? */
 		return NULL;
@@ -802,8 +958,8 @@ void x86_visit_chunk(X86 *X, ASTChunk *chunk) {
 
 void x86_finish(X86 *X) {
 #ifdef SYNTAX_GAS
-	fprintf(stdout, ".section .text\n%s", X->text);
+	fprintf(stdout, ".section .text\nmain:\n%s", X->text);
 #else
-	fprintf(stdout, "section .text\n%s", X->text);
+	fprintf(stdout, "section .text\nglobal main\nmain:\n%s", X->text);
 #endif
 }

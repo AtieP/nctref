@@ -49,7 +49,7 @@ static int maybe(Parser *P, TokenKind t) {
 }
 
 AST *nct_parse_expression(Parser *P, int lOP) {
-	if(lOP == 4) {
+	if(lOP == 5) {
 		if(peek(P, 0).type == TOKEN_NUMBER) {
 			ASTExpressionPrimitive *ret = malloc(sizeof(*ret));
 			ret->nodeKind = AST_EXPRESSION_PRIMITIVE;
@@ -82,7 +82,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			
 			return (AST*) ret;
 		}
-	} else if(lOP == 3) {
+	} else if(lOP == 4) {
 		if(maybe(P, TOKEN_STAR)) {
 			ASTExpressionUnaryOp *astop = malloc(sizeof(*astop));
 			astop->nodeKind = AST_EXPRESSION_UNARY_OP;
@@ -130,7 +130,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 				return (AST *) astop;
 			}
 		} else return nct_parse_expression(P, lOP + 1);
-	} else if(lOP == 2) {
+	} else if(lOP == 3) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 
 		while(maybe(P, TOKEN_PAREN_L)) {
@@ -146,11 +146,26 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			call->args = NULL;
 			ret = (AST*) call;
 			
-			expect(P, TOKEN_PAREN_R);
+			int argCount = 0;
+			
+			if(!maybe(P, TOKEN_PAREN_R)) {
+				while(peek(P, 0).type != TOKEN_PAREN_R && peek(P, 0).type != TOKEN_COMMA) {
+					call->args = realloc(call->args, (argCount + 1) * sizeof(AST*));
+					call->args[argCount] = nct_parse_expression(P, 0);
+					
+					argCount++;
+					
+					if(maybe(P, TOKEN_PAREN_R)) {
+						break;
+					} else expect(P, TOKEN_COMMA);
+				}
+			}
+			
+			/* TODO: Check argument count. */
 		}
 		
 		return ret;
-	} else if(lOP == 1) {
+	} else if(lOP == 2) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 		
 		if(peek(P, 0).type == TOKEN_STAR || peek(P, 0).type == TOKEN_SLASH) {
@@ -198,7 +213,7 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 		}
 		
 		return ret;
-	} else if(lOP == 0) {
+	} else if(lOP == 1) {
 		AST *ret = nct_parse_expression(P, lOP + 1);
 		
 		if(
@@ -255,15 +270,71 @@ AST *nct_parse_expression(Parser *P, int lOP) {
 			ret = (AST*) astop;
 		}
 		
+		return ret;
+	} else if(lOP == 0) {
+		AST *ret = nct_parse_expression(P, lOP + 1);
+		
+		if(peek(P, 0).type == TOKEN_DOUBLE_EQUALS) {
+			ASTExpressionBinaryOp *astop = malloc(sizeof(*astop));
+			astop->nodeKind = AST_EXPRESSION_BINARY_OP;
+			astop->constantType = EXPRESSION_NOT_CONSTANT;
+			astop->amountOfOperands = 1;
+			astop->type = NULL;
+			
+			size_t capacity = 2;
+			astop->operands = malloc(sizeof(*astop->operands) * capacity);
+			astop->operators = malloc(sizeof(*astop->operators) * (capacity - 1));
+			
+			astop->operands[0] = ret;
+			
+			while(1) {
+				BinaryOp op;
+				if(maybe(P, TOKEN_DOUBLE_EQUALS)) op = BINOP_EQUAL;
+				else break;
+				
+				if(astop->amountOfOperands == capacity) {
+					capacity *= 2;
+					
+					astop->operands = realloc(astop->operands, sizeof(*astop->operands) * capacity);
+					astop->operators = realloc(astop->operators, sizeof(*astop->operators) * (capacity - 1));
+				}
+				
+				astop->operators[astop->amountOfOperands - 1] = op;
+				ASTExpression *operand = &(astop->operands[astop->amountOfOperands++] = nct_parse_expression(P, lOP + 1))->expression;
+				
+				if(operand->type->type != TYPE_TYPE_PRIMITIVE) {
+					stahp(P->tokens[P->i].row, P->tokens[P->i].column, "Invalid combination of operator and operand types.");
+  				}
+  				
+  				if(!astop->type) {
+					astop->type = operand->type;
+				} else {
+					if(type_size(operand->type) > type_size(astop->type)) {
+						astop->type = operand->type;
+					}
+				}
+			}
+		}
+		
 		ret = ast_expression_optimize(ret);
 		
 		return ret;
 	}
+#ifdef DEBUG
+	else abort();
+#endif
 	
 	return NULL;
 }
 
+/* Since this function backtracks, don't use aborting functions like expect. */
 Type *nct_parse_typename(Parser *P) {
+	int oldIdx = P->i;
+	
+	if(peek(P, 0).type != TOKEN_IDENTIFIER) {
+		goto backtrack;
+	}
+	
 	Type *ret = (Type*) primitive_parse(expect(P, TOKEN_IDENTIFIER).content);
 	
 	while(peek(P, 0).type == TOKEN_PAREN_L || peek(P, 0).type == TOKEN_STAR) {
@@ -284,7 +355,10 @@ Type *nct_parse_typename(Parser *P) {
 				while(1) {
 					fun->argCount++;
 					fun->args = realloc(fun->args, sizeof(Type*) * fun->argCount);
-					fun->args[fun->argCount - 1] = nct_parse_typename(P);
+					if((fun->args[fun->argCount - 1] = nct_parse_typename(P)) == NULL) {
+						free(fun);
+						goto backtrack;
+					}
 					
 					if(maybe(P, TOKEN_PAREN_R)) {
 						break;
@@ -297,9 +371,15 @@ Type *nct_parse_typename(Parser *P) {
 	}
 	
 	return ret;
+backtrack:
+	P->i = oldIdx;
+	return NULL;
 }
 
+/* Potentially backtracking. Returns NULL upon failure. */
 static AST *parse_declaration(Parser *P) {
+	int oldIdx = P->i;
+	
 	int isLocal = maybe(P, TOKEN_LOCAL);
 	int isExternal = 0;
 	if(!isLocal) {
@@ -307,6 +387,10 @@ static AST *parse_declaration(Parser *P) {
 	}
 	
 	Type *type = nct_parse_typename(P);
+	
+	if(!type) goto backtrack;
+	if(peek(P, 0).type != TOKEN_IDENTIFIER) goto backtrack;
+	
 	Token name = expect(P, TOKEN_IDENTIFIER);
 		
 	VarTableEntry *entry = malloc(sizeof(*entry));
@@ -353,6 +437,9 @@ static AST *parse_declaration(Parser *P) {
 	expect(P, TOKEN_SEMICOLON);
 	
 	return (AST*) ret;
+backtrack:
+	P->i = oldIdx;
+	return NULL;
 }
 
 ASTChunk *nct_parse_chunk(Parser*, int);
@@ -391,7 +478,20 @@ AST *nct_parse_statement(Parser *P) {
 		return (AST*) ret;
 	}
 	
-	return parse_declaration(P);
+	{
+		AST *decl = parse_declaration(P);
+		if(decl) {
+			return decl;
+		}
+	}
+	
+	ASTStatementExpr *ret = malloc(sizeof(*ret));
+	ret->nodeKind = AST_STATEMENT_EXPR;
+	ret->next = NULL;
+	ret->expr = nct_parse_expression(P, 0);
+	expect(P, TOKEN_SEMICOLON);
+	
+	return (AST*) ret;
 }
 
 ASTChunk *nct_parse_chunk(Parser *P, int isTopLevel) {

@@ -29,7 +29,8 @@ typedef enum {
 	TOKEN_AMPERSAND,
 	TOKEN_VERTICAL_BAR,
 	TOKEN_CARET,
-	TOKEN_TILDE
+	TOKEN_TILDE,
+	TOKEN_DOUBLE_EQUALS,
 } TokenKind;
 
 typedef struct {
