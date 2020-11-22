@@ -28,6 +28,12 @@ int __builtin_ctz(uint8_t i) {
 }
 #endif
 
+static inline uint64_t log2i(uint64_t n) {
+	uint64_t val;
+	for (val = 0; n > 1; val++, n >>= 1);
+	return val;
+}
+
 static uint8_t register_size(int i) {
 	return 1 << (i / 6);
 }
@@ -503,17 +509,17 @@ static void gpushi(X86 *X, int64_t val) {
 #endif
 }
 
-static void gaddi(X86 *X, X86AllocationInfo *info, size_t val) {
+static void g2op1iinst(X86 *X, X86AllocationInfo *info, size_t val, const char *inst) {
 	dstr i = gdescribeinfo(X, info, -1);
 #ifdef SYNTAX_GAS
-	X->text = dstrfmt(X->text, "add%s $%i, %S\n", yasm_sizespecifier(info->size), val, i);
+	X->text = dstrfmt(X->text, "%s%s $%i, %S\n", inst, yasm_sizespecifier(info->size), val, i);
 #else
-	X->text = dstrfmt(X->text, "add %S, %i\n", i, val);
+	X->text = dstrfmt(X->text, "%s %S, %i\n", inst, i, val);
 #endif
 	dstrfree(i);
 }
 
-static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int isSub) {
+static void g2opinst(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, const char *inst) {
 	if(src->size != dst->size) {
 		src = x86_cast_alloc(X, src, dst->size);
 	}
@@ -523,20 +529,32 @@ static void gaddsub(X86 *X, X86AllocationInfo *dst, X86AllocationInfo *src, int 
 	
 	if(dst->strategy == X86_ALLOC_REG || src->strategy == X86_ALLOC_REG) {
 #ifdef SYNTAX_GAS
-		X->text = dstrfmt(X->text, "%s%s %S, %S\n", isSub ? "sub" : "add", yasm_sizespecifier(dst->size), s, d);
+		X->text = dstrfmt(X->text, "%s%s %S, %S\n", inst, yasm_sizespecifier(dst->size), s, d);
 #else
-		X->text = dstrfmt(X->text, "%s %S, %S\n", isSub ? "sub" : "add", d, s);
+		X->text = dstrfmt(X->text, "%s %S, %S\n", inst, d, s);
 #endif
 	} else { /* Multiple memory operands which is an invalid combination. Copy src into a register. */
 		X86AllocationInfo *tmp = x86_allocreg(X, dst->size, 0);
 		
 		gmov(X, tmp, src);
-		gaddsub(X, dst, tmp, isSub);
+		g2opinst(X, dst, tmp, inst);
 		
 		x86_free(X, tmp);
 	}
 	dstrfree(s);
 	dstrfree(d);
+}
+
+static void g1opinst(X86 *X, X86AllocationInfo *op, const char *inst) {
+	dstr o = gdescribeinfo(X, op, -1);
+	
+#ifdef SYNTAX_GAS
+	X->text = dstrfmt(X->text, "%s%s %S", inst, yasm_sizespecifier(op->size), o);
+#else
+	X->text = dstrfmt(X->text, "%s %S", inst, o);
+#endif
+	
+	dstrfree(o);
 }
 
 static void gcmp0(X86 *X, X86AllocationInfo *info) {
@@ -702,18 +720,52 @@ X86AllocationInfo *x86_visit_expression(X86 *X, AST *ast, X86AllocationInfo *dst
 		
 		for(size_t i = 1; i < ast->expressionBinaryOp.amountOfOperands; i++) {
 			AST *operand = ast->expressionBinaryOp.operands[i];
-			if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
-				int64_t addend = operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator;
-				
-				if(ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB) {
-					addend = -addend;
+			
+			if(ast->expressionBinaryOp.operators[i - 1] == BINOP_MUL) {
+				if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE && (operand->expressionPrimitive.numerator & (operand->expressionPrimitive.numerator - 1)) == 0) { /* Is primitive and PoT? */
+					g2op1iinst(X, dst, log2i(operand->expressionPrimitive.numerator), "shl");
+				} else {
+					/* Free the accumulator and move it there, unless it's not already in the accumulator. */
+					if(!(dst->strategy == X86_ALLOC_REG && cast_register(dst->regId, 1) == ralloc_findname(X->rallocator, "al"))) {
+						X86AllocationInfo *accum = x86_makeregavailable(X, cast_register(ralloc_findname(X->rallocator, "al"), dst->size));
+						gmov(X, accum, dst);
+						x86_free(X, dst);
+						dst = accum;
+					}
+					
+					X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
+					g1opinst(X, a, "mul");
+					x86_free(X, a);
+				}
+			} else if(ast->expressionBinaryOp.operators[i - 1] == BINOP_DIV) {
+				if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE && (operand->expressionPrimitive.numerator & (operand->expressionPrimitive.numerator - 1)) == 0) { /* Is primitive and PoT? */
+					g2op1iinst(X, dst, log2i(operand->expressionPrimitive.numerator), "shr");
+				} else {
+					abort(); /* Not implemented yet. */
+				}
+			} else {
+				const char *inst;
+				switch(ast->expressionBinaryOp.operators[i - 1]) {
+					case BINOP_ADD: inst = "add"; break;
+					case BINOP_SUB: inst = "sub"; break;
+					case BINOP_BITWISE_AND: inst = "and"; break;
+					case BINOP_BITWISE_OR: inst = "or"; break;
+					case BINOP_BITWISE_XOR: inst = "xor"; break;
+#ifdef DEBUG
+					default: abort();
+#endif
 				}
 				
-				gaddi(X, dst, addend);
-			} else {
-				X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
-				gaddsub(X, dst, a, ast->expressionBinaryOp.operators[i - 1] == BINOP_SUB);
-				x86_free(X, a);
+				if(operand->nodeKind == AST_EXPRESSION_PRIMITIVE) {
+					int64_t addend = operand->expressionPrimitive.numerator / operand->expressionPrimitive.denominator;
+					g2op1iinst(X, dst, addend, inst);
+				} else {
+					X86AllocationInfo *a = x86_visit_expression(X, operand, NULL);
+					
+					g2opinst(X, dst, a, inst);
+					
+					x86_free(X, a);
+				}
 			}
 		}
 		
